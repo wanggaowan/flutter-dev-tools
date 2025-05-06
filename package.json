@@ -1,0 +1,122 @@
+{
+  "name": "flutter-dev-tools",
+  "displayName": "FlutterDevTools",
+  "description": "flutter开发工具集",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "media/flutter.png",
+  "activationEvents": [
+    "workspaceContains:pubspec.yaml",
+		"workspaceContains:*/pubspec.yaml",
+		"workspaceContains:*/*/pubspec.yaml",
+		"workspaceContains:*.dart",
+		"workspaceContains:*/*.dart",
+		"workspaceContains:*/*/*.dart"
+  ],
+  "extensionDependencies": [
+    "Dart-Code.dart-code"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "flutterProjectView.addFile",
+        "title": "新建文件",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "flutterProjectView.addFolder",
+        "title": "新建文件夹",
+        "icon": "$(file-directory-create)"
+      },
+      {
+        "command": "flutterProjectView.delete",
+        "title": "删除",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "flutterProjectView.refresh",
+        "title": "刷新",
+        "icon": "$(refresh)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "flutterProjectView",
+          "name": "Flutter",
+          "icon": "media/flutter.png",
+          "when": "flutterDevTools.projectTreeViewEnable"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "flutterProjectView.addFile",
+          "when": "view == flutterProjectView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flutterProjectView.addFolder",
+          "when": "view == flutterProjectView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "flutterProjectView.refresh",
+          "when": "view == flutterProjectView",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "flutterProjectView.addFile",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
+          "group": "fileOp@1"
+        },
+        {
+          "command": "flutterProjectView.addFolder",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
+          "group": "fileOp@2"
+        },
+        {
+          "command": "flutterProjectView.delete",
+          "when": "view == flutterProjectView",
+          "group": "fileOp@3"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "eslint": "^9.23.0",
+    "esbuild": "^0.25.1",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.2",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1"
+  }
+}
