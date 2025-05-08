@@ -12,17 +12,26 @@
   "icon": "media/flutter.png",
   "activationEvents": [
     "workspaceContains:pubspec.yaml",
-		"workspaceContains:*/pubspec.yaml",
-		"workspaceContains:*/*/pubspec.yaml",
-		"workspaceContains:*.dart",
-		"workspaceContains:*/*.dart",
-		"workspaceContains:*/*/*.dart"
+    "workspaceContains:*/pubspec.yaml",
+    "workspaceContains:*/*/pubspec.yaml",
+    "workspaceContains:*.dart",
+    "workspaceContains:*/*.dart",
+    "workspaceContains:*/*/*.dart"
   ],
   "extensionDependencies": [
     "Dart-Code.dart-code"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "image-preview",
+          "title": "Image Preview",
+          "icon": "media/flutter.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "flutterProjectView.addFile",
@@ -50,7 +59,16 @@
         {
           "id": "flutterProjectView",
           "name": "Flutter",
-          "icon": "media/flutter.png",
+          "icon": "media/flutter.svg",
+          "when": "flutterDevTools.projectTreeViewEnable"
+        }
+      ],
+      "image-preview": [
+        {
+          "id": "imagePreviewView",
+          "type": "webview",
+          "name": "ImagePreview",
+          "icon": "media/flutter.svg",
           "when": "flutterDevTools.projectTreeViewEnable"
         }
       ]
@@ -76,12 +94,12 @@
       "view/item/context": [
         {
           "command": "flutterProjectView.addFile",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
+          "when": "view == flutterProjectView",
           "group": "fileOp@1"
         },
         {
           "command": "flutterProjectView.addFolder",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
+          "when": "view == flutterProjectView",
           "group": "fileOp@2"
         },
         {

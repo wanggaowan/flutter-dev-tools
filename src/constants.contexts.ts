@@ -5,6 +5,9 @@ export const PROJECT_TREE_VIEW_ENABLE_CONTEXT =
 export const File_NODE_CONTEXT = "flutterDevTools.isFile";
 export const Folder_NODE_CONTEXT = "flutterDevTools.isFolder";
 
+// 图片预览项目视图Id
+export const IMAGE_PREVIEW_VIEW_ID = "imagePreviewView";
+
 // 注册的命令常量
 export const COMMAND_PROJECT_VIEW_ADD_FILE = `${PROJECT_TREE_VIEW_ID}.addFile`;
 export const COMMAND_PROJECT_VIEW_ADD_FOLDER = `${PROJECT_TREE_VIEW_ID}.addFolder`;
