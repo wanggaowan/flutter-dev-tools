@@ -2,12 +2,22 @@
   "name": "flutter-dev-tools",
   "displayName": "FlutterDevTools",
   "description": "flutter开发工具集",
+  "publisher": "wanggaowan",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.99.0"
   },
   "categories": [
     "Other"
+  ],
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wanggaowan/flutter-dev-tools"
+  },
+  "keywords": [
+    "dart",
+    "flutter"
   ],
   "icon": "media/flutter.png",
   "activationEvents": [
@@ -42,6 +52,10 @@
         "command": "flutterProjectView.addFolder",
         "title": "新建文件夹",
         "icon": "$(file-directory-create)"
+      },
+      {
+        "command": "flutterProjectView.rename",
+        "title": "重命名"
       },
       {
         "command": "flutterProjectView.delete",
@@ -103,9 +117,14 @@
           "group": "fileOp@2"
         },
         {
-          "command": "flutterProjectView.delete",
+          "command": "flutterProjectView.rename",
           "when": "view == flutterProjectView",
           "group": "fileOp@3"
+        },
+        {
+          "command": "flutterProjectView.delete",
+          "when": "view == flutterProjectView",
+          "group": "fileOp@4"
         }
       ]
     }

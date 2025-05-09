@@ -7,10 +7,11 @@ import {
   COMMAND_PROJECT_VIEW_ADD_FOLDER,
   COMMAND_PROJECT_VIEW_DELETE_FILE,
   COMMAND_PROJECT_VIEW_REFRESH,
+  COMMAND_PROJECT_VIEW_RENAME,
   File_NODE_CONTEXT,
   Folder_NODE_CONTEXT,
 } from "../constants.contexts";
-import { disposeAll } from "../utils/utils";
+import { closeFileEditor, disposeAll } from "../utils/utils";
 import Logger from "../utils/logger";
 
 /**
@@ -51,6 +52,12 @@ export class FlutterProjectProvider
     disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_ADD_FOLDER,
       (uri) => this.createFolderCommand(uri)
+    );
+    this.disposableList.push(disposable);
+
+    disposable = vscode.commands.registerCommand(
+      COMMAND_PROJECT_VIEW_RENAME,
+      (uri) => this.renameCommand(uri)
     );
     this.disposableList.push(disposable);
 
@@ -289,6 +296,46 @@ export class FlutterProjectProvider
         fs.unlinkSync(uri.path);
       }
       this.refresh();
+      closeFileEditor(uri.path);
+    } catch (e) {}
+  }
+
+  private async renameCommand(uri?: FileTreeItem) {
+    if (uri == undefined) {
+      return;
+    }
+
+    let treeView = this.treeView;
+    if (treeView == undefined) {
+      Logger.showNotification("Flutter项目视图绑定失败", "error");
+      return;
+    }
+
+    let find = treeView.selection.find((value) => value == uri);
+    const fileName = await vscode.window.showInputBox({
+      placeHolder: "请输新的名称",
+      value: uri.label,
+      prompt: "重命名",
+      validateInput: (value) => {
+        if (!value) return "名称不能为空";
+        if (value.includes("/") || value.includes("\\"))
+          return "名称不能包含路径分隔符";
+        let path = find?.parent?.path ?? this.workspaceRoot;
+        if (fs.existsSync(path + "/" + value)) {
+          return uri.contextValue == Folder_NODE_CONTEXT
+            ? "已存在同名文件夹"
+            : "已存在同名文件";
+        }
+        return null;
+      },
+    });
+
+    if (!fileName) return;
+    let parentPath = uri.parent?.path ?? this.workspaceRoot;
+    try {
+      fs.renameSync(uri.path, parentPath + "/" + fileName);
+      this.refresh();
+      closeFileEditor(uri.path);
     } catch (e) {}
   }
 }
