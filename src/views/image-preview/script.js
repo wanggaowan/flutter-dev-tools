@@ -9,10 +9,40 @@ const noImagesElement = document.getElementById("no-images");
 const refreshBtn = document.getElementById("refresh-btn");
 const selectDirBtn = document.getElementById("select-dir-btn");
 const searchInput = document.getElementById("search-input");
+
 let isRefresh = false;
+let originalImages;
+let searchText = "";
 
 // 搜索内容发生变化
-searchInput.addEventListener("input", (e) => {});
+searchInput.addEventListener("input", (e) => {
+  searchText = e.target.value;
+  search();
+});
+
+function search() {
+  if (
+    originalImages == undefined ||
+    originalImages == null ||
+    originalImages.length == 0
+  ) {
+    loadImages(originalImages);
+    return;
+  }
+
+  if (searchText == undefined || searchText == null || searchText.length == 0) {
+    loadImages(originalImages);
+    return;
+  }
+
+  let findImages = [];
+  for (let image of originalImages) {
+    if (image.name.includes(searchText)) {
+      findImages.push(image);
+    }
+  }
+  loadImages(findImages);
+}
 
 // 视图切换
 viewButtons.forEach((button) => {
@@ -59,7 +89,14 @@ function loadImages(images) {
   isRefresh = false;
   loadingElement.style.display = "none";
   if (images == null || images == undefined || images.length === 0) {
+    listView.innerHTML = "";
+    gridView.innerHTML = "";
     noImagesElement.style.display = "block";
+    if (originalImages && originalImages.length > 0) {
+      noImagesElement.innerText = "";
+    } else {
+      noImagesElement.innerText = "该目录下没有图片";
+    }
     return;
   }
 
@@ -81,8 +118,8 @@ function renderImages(images) {
     listItem.innerHTML = `
             <img src="${image.path}" alt="${image.name}" onerror="this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2224%22 height%3D%2224%22 viewBox%3D%220 0 24 24%22%3E%3Cpath fill%3D%22%23CCC%22 d%3D%22M21.9 21.9l-8.9-8.9-8.9 8.9H21.9zM2.1 2.1v19.8L21.9 2.1H2.1z%22%2F%3E%3C%2Fsvg%3E'">
             <div class="image-info">
-                <div class="image-name">${image.name}</div>
-                <div class="image-path">${image.showPath}</div>
+                <div class="image-name" title="${image.name}">${image.name}</div>
+                <div class="image-path" title="${image.showPath}">${image.showPath}</div>
             </div>
         `;
     listView.appendChild(listItem);
@@ -95,8 +132,8 @@ function renderImages(images) {
                 <img src="${image.path}" alt="${image.name}" onerror="this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2224%22 height%3D%2224%22 viewBox%3D%220 0 24 24%22%3E%3Cpath fill%3D%22%23CCC%22 d%3D%22M21.9 21.9l-8.9-8.9-8.9 8.9H21.9zM2.1 2.1v19.8L21.9 2.1H2.1z%22%2F%3E%3C%2Fsvg%3E'">
             </div>
             <div class="image-info">
-                <div class="image-name">${image.name}</div>
-                <div class="image-path">${image.showPath}</div>
+                 <div class="image-name" title="${image.name}">${image.name}</div>
+                <div class="image-path" title="${image.showPath}">${image.showPath}</div>
             </div>
         `;
     gridView.appendChild(gridItem);
@@ -113,17 +150,18 @@ function showPreview(imagePath) {
 }
 
 function init(data) {
-  if (data.isDarkTheme) {
-    document.body.classList.add("dark-mode");
+  if (!data.isDarkTheme) {
+    document.body.classList.add("light-mode");
   }
   currentPathElement.textContent = data.path;
+  currentPathElement.title = data.path;
 }
 
 function changeTheme(data) {
-  if (data.isDarkTheme) {
-    document.body.classList.add("dark-mode");
+  if (!data.isDarkTheme) {
+    document.body.classList.add("light-mode");
   } else {
-    document.body.classList.remove("dark-mode");
+    document.body.classList.remove("light-mode");
   }
   refreshBtn.setAttribute("src", data.refreshBtnUri);
   viewButtons.forEach((button) => {
@@ -150,7 +188,8 @@ window.addEventListener("message", (event) => {
       break;
 
     case "loadImages":
-      loadImages(message.data);
+      originalImages = message.data;
+      search();
       break;
   }
 });

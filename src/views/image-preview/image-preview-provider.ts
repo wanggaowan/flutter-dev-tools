@@ -83,12 +83,8 @@ export class ImagePreviewProvider
     this.refresh();
   }
 
-  private update(webview: vscode.Webview, imagesDir?: string) {
-    if (
-      imagesDir &&
-      this.workspaceRoot &&
-      !imagesDir.startsWith(this.workspaceRoot.path)
-    ) {
+  private updateImageDir(webview: vscode.Webview, imagesDir: string) {
+    if (this.workspaceRoot && !imagesDir.startsWith(this.workspaceRoot.path)) {
       webview.options = {
         enableScripts: true,
         localResourceRoots: [
@@ -98,14 +94,20 @@ export class ImagePreviewProvider
         ],
       };
     }
-    // webview.html = this._getHtmlForWebview(webview);
+    webview.postMessage({
+      type: "init_data",
+      data: {
+        isDarkTheme: this.isDarkTheme,
+        path: this.getImageRelPath(),
+      },
+    });
   }
 
   private get isDarkTheme() {
     let kind = vscode.window.activeColorTheme.kind;
     return (
-      kind == vscode.ColorThemeKind.Dark ||
-      kind == vscode.ColorThemeKind.HighContrast
+      kind != vscode.ColorThemeKind.Light &&
+      kind != vscode.ColorThemeKind.HighContrastLight
     );
   }
 
@@ -153,17 +155,19 @@ export class ImagePreviewProvider
                         <img class="view-btn" data-view="grid" src="${gridBtnUri}"/>
                     </div>
 
+                    <div class="view-contents">
+                       <div class="loading" id="loading">加载中...</div>
+                       <div class="no-images" id="no-images" style="display: none;">该目录下没有图片</div>
+
+                       <div class="list-view active" id="list-view"></div>
+                       <div class="grid-view" id="grid-view"></div>
+                    </div>
+
                     <div class="directory-selector">
                         <button id="select-dir-btn" class="select-dir-btn">change</button>
                         <div class="directory-path" id="current-path"></div>
                         <img id="refresh-btn" class="refresh-btn" src="${refreshBtnUri}"/>
                     </div>
-
-                    <div class="loading" id="loading">加载中...</div>
-                    <div class="no-images" id="no-images" style="display: none;">该目录下没有图片</div>
-
-                    <div class="list-view active" id="list-view"></div>
-                    <div class="grid-view" id="grid-view"></div>
                 </div>
 
                 <script nonce="${nonce}" src="${scriptUri}"></script>
@@ -223,10 +227,99 @@ export class ImagePreviewProvider
         return relPath;
       }
     }
-    return "";
+    return this.imageDir ?? "";
   }
 
-  private refresh() {}
+  private async refresh() {
+    if (!this.webview) {
+      return;
+    }
+
+    let dir = this.imageDir;
+    if (!dir || dir.length == 0) {
+      this.webview.postMessage({ type: "loadImages" });
+      return;
+    }
+    let files: ImageData[] = [];
+    await this.readAllImages(dir, files);
+    this.webview.postMessage({ type: "loadImages", data: files });
+  }
+
+  private readAllImages(dir: string, images: ImageData[]) {
+    let files = fs.readdirSync(dir);
+    let dirs: string[] = [];
+    let rootPath = this.workspaceRoot?.path;
+    for (let name of files) {
+      let filePath = dir + "/" + name;
+      if (fs.statSync(filePath).isDirectory()) {
+        dirs.push(filePath);
+      } else if (
+        this.isImage(filePath) &&
+        !this.existSameImage(images, filePath)
+      ) {
+        images.push(this.filePath2ImageData(name, filePath, rootPath));
+      }
+    }
+
+    for (let dir of dirs) {
+      this.readAllImages(dir, images);
+    }
+  }
+
+  private isImage(name: string) {
+    name = name.toLocaleLowerCase();
+    return (
+      name.endsWith(".png") ||
+      name.endsWith(".jpg") ||
+      name.endsWith(".jpeg") ||
+      name.endsWith(".gif") ||
+      name.endsWith(".svg") ||
+      name.endsWith(".webp")
+    );
+  }
+
+  private filePath2ImageData(
+    name: string,
+    filePath: string,
+    rootPath?: string
+  ): ImageData {
+    let indexOf = filePath.lastIndexOf("/");
+    let previewPath = filePath;
+    let path = this.webview
+      ? this.webview.asWebviewUri(vscode.Uri.file(filePath)).toString()
+      : "";
+    let showPath: string;
+    if (rootPath && filePath.startsWith(rootPath)) {
+      showPath = filePath.substring(rootPath.length + 1);
+    } else {
+      showPath = filePath;
+    }
+    return {
+      name: name,
+      path: path,
+      showPath: showPath,
+      previewPath: previewPath,
+    };
+  }
+
+  private existSameImage(images: ImageData[], filePath: string): boolean {
+    filePath = filePath
+      .replaceAll("1.5x/", "")
+      .replace("2.0x/", "")
+      .replace("3.0x/", "")
+      .replace("4.0x/", "");
+    for (let image of images) {
+      let path = image.previewPath
+        .replaceAll("1.5x/", "")
+        .replace("2.0x/", "")
+        .replace("3.0x/", "")
+        .replace("4.0x/", "");
+      if (filePath == path) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   private async changeDir() {
     let defaultUri: vscode.Uri | undefined;
@@ -246,9 +339,10 @@ export class ImagePreviewProvider
     if (uris == undefined || uris.length == 0) {
       return;
     }
+
     if (this.webview) {
       this.imageDir = uris[0].path;
-      this.update(this.webview, this.imageDir);
+      this.updateImageDir(this.webview, this.imageDir);
       this.refresh();
     }
   }
@@ -262,4 +356,5 @@ type ImageData = {
   name: string;
   showPath: string;
   path: string;
+  previewPath: string;
 };

@@ -26,9 +26,9 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "image-preview",
-          "title": "Image Preview",
-          "icon": "media/flutter.svg"
+          "id": "resource-manger",
+          "title": "Resource Manager",
+          "icon": "media/Resources.svg"
         }
       ]
     },
@@ -63,12 +63,12 @@
           "when": "flutterDevTools.projectTreeViewEnable"
         }
       ],
-      "image-preview": [
+      "resource-manger": [
         {
           "id": "imagePreviewView",
           "type": "webview",
-          "name": "ImagePreview",
-          "icon": "media/flutter.svg",
+          "name": "Image",
+          "icon": "media/resource.svg",
           "when": "flutterDevTools.projectTreeViewEnable"
         }
       ]
