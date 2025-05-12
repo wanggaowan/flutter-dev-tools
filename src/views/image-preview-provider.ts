@@ -14,13 +14,12 @@ export class ImagePreviewProvider
   private imageDir?: string;
 
   constructor(
+    private context: vscode.ExtensionContext,
     private workspaceRoot: vscode.Uri | undefined,
     extensionUri: vscode.Uri
   ) {
     this._extensionUri = extensionUri;
-    if (this.workspaceRoot) {
-      this.imageDir = this.workspaceRoot.path + "/assets/images";
-    }
+    this.initDefaultImageDirPath();
     const onThemeChange = vscode.window.onDidChangeActiveColorTheme((theme) => {
       if (this.webview) {
         let isDark = this.isDarkTheme;
@@ -36,6 +35,19 @@ export class ImagePreviewProvider
     this.disposableList.push(onThemeChange);
   }
 
+  private async initDefaultImageDirPath() {
+    let path = this.context.workspaceState.get<string>("imageDirPath");
+    if (!path || !fs.existsSync(path)) {
+      path = vscode.workspace.getConfiguration("flutterDevTools").imageSrcPath;
+    }
+
+    if (!path && this.workspaceRoot) {
+      path = this.workspaceRoot.path + "/assets/images";
+    }
+
+    this.imageDir = path;
+  }
+
   dispose() {
     this.webview = undefined;
     disposeAll(this.disposableList);
@@ -47,13 +59,7 @@ export class ImagePreviewProvider
     token: vscode.CancellationToken
   ): Thenable<void> | void {
     this.webview = webviewView.webview;
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: this.workspaceRoot
-        ? [this._extensionUri, this.workspaceRoot]
-        : [this._extensionUri],
-    };
-
+    this.changeWebviewOptions(webviewView.webview, this.imageDir);
     webviewView.webview.onDidReceiveMessage(
       (message) => {
         switch (message.type) {
@@ -80,19 +86,36 @@ export class ImagePreviewProvider
         path: this.getImageRelPath(),
       },
     });
-    this.refresh();
+    if (!this.imageDir) {
+      this.initDefaultImageDirPath().then(() => this.refresh());
+    } else {
+      this.refresh();
+    }
+  }
+
+  private changeWebviewOptions(webview: vscode.Webview, imagesDir?: string) {
+    let localRes: vscode.Uri[] = [this._extensionUri];
+    if (this.workspaceRoot) {
+      localRes.push(this.workspaceRoot);
+    }
+
+    if (
+      this.workspaceRoot &&
+      imagesDir &&
+      !imagesDir.startsWith(this.workspaceRoot.path)
+    ) {
+      localRes.push(vscode.Uri.file(imagesDir));
+    }
+
+    webview.options = {
+      enableScripts: true,
+      localResourceRoots: localRes,
+    };
   }
 
   private updateImageDir(webview: vscode.Webview, imagesDir: string) {
     if (this.workspaceRoot && !imagesDir.startsWith(this.workspaceRoot.path)) {
-      webview.options = {
-        enableScripts: true,
-        localResourceRoots: [
-          this._extensionUri,
-          this.workspaceRoot,
-          vscode.Uri.file(imagesDir),
-        ],
-      };
+      this.changeWebviewOptions(webview, imagesDir);
     }
     webview.postMessage({
       type: "init_data",
@@ -239,29 +262,31 @@ export class ImagePreviewProvider
       return;
     }
     let files: ImageData[] = [];
-    await this.readAllImages(dir, files);
+    this.readAllImages(dir, files);
     this.webview.postMessage({ type: "loadImages", data: files });
   }
 
   private readAllImages(dir: string, images: ImageData[]) {
-    let files = fs.readdirSync(dir);
-    let dirs: string[] = [];
-    let rootPath = this.workspaceRoot?.path;
-    for (let name of files) {
-      let filePath = dir + "/" + name;
-      if (fs.statSync(filePath).isDirectory()) {
-        dirs.push(filePath);
-      } else if (
-        this.isImage(filePath) &&
-        !this.existSameImage(images, filePath)
-      ) {
-        images.push(this.filePath2ImageData(name, filePath, rootPath));
+    try {
+      let files = fs.readdirSync(dir);
+      let dirs: string[] = [];
+      let rootPath = this.workspaceRoot?.path;
+      for (let name of files) {
+        let filePath = dir + "/" + name;
+        if (fs.statSync(filePath).isDirectory()) {
+          dirs.push(filePath);
+        } else if (
+          this.isImage(filePath) &&
+          !this.existSameImage(images, filePath)
+        ) {
+          images.push(this.filePath2ImageData(name, filePath, rootPath));
+        }
       }
-    }
 
-    for (let dir of dirs) {
-      this.readAllImages(dir, images);
-    }
+      for (let dir of dirs) {
+        this.readAllImages(dir, images);
+      }
+    } catch (e) {}
   }
 
   private isImage(name: string) {
@@ -321,7 +346,7 @@ export class ImagePreviewProvider
 
   private async changeDir() {
     let defaultUri: vscode.Uri | undefined;
-    if (this.imageDir) {
+    if (this.imageDir && fs.existsSync(this.imageDir)) {
       defaultUri = vscode.Uri.file(this.imageDir);
     } else if (this.workspaceRoot) {
       defaultUri = this.workspaceRoot;
@@ -340,6 +365,7 @@ export class ImagePreviewProvider
 
     if (this.webview) {
       this.imageDir = uris[0].path;
+      this.context.workspaceState.update("imageDirPath", this.imageDir);
       this.updateImageDir(this.webview, this.imageDir);
       this.refresh();
     }

@@ -83,7 +83,11 @@ function registerImagePreviewView(context: vscode.ExtensionContext) {
     vscode.workspace.workspaceFolders.length > 0
       ? vscode.workspace.workspaceFolders[0].uri
       : undefined;
-  let provider = new ImagePreviewProvider(rootPath, context.extensionUri);
+  let provider = new ImagePreviewProvider(
+    context,
+    rootPath,
+    context.extensionUri
+  );
   context.subscriptions.push(provider);
   let treeView = vscode.window.registerWebviewViewProvider(
     IMAGE_PREVIEW_VIEW_ID,

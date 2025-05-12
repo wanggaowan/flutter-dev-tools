@@ -7,6 +7,17 @@
   "engines": {
     "vscode": "^1.99.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false
+    },
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
   "categories": [
     "Other"
   ],
@@ -149,7 +160,21 @@
           "icon": "media/Resources.svg"
         }
       ]
-    }
+    },
+    "configuration": [
+      {
+        "title": "Flutter资源配置",
+        "order": 1,
+        "properties": {
+          "flutterDevTools.imageSrcPath": {
+            "type": "string",
+            "default": "assets/images",
+            "description": "存放图片资源的目录,此目录为基于Flutter项目根目录的相对目录",
+            "scope": "window"
+          }
+        }
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
