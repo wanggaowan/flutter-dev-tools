@@ -114,6 +114,10 @@ function renderImages(images) {
   images.forEach((image) => {
     // 创建列表视图项
     const listItem = document.createElement("div");
+    listItem.setAttribute(
+      "data-vscode-context",
+      '{"preventDefaultContextMenuItems": true, "webviewSection": "image" }'
+    );
     listItem.className = "list-item";
     listItem.innerHTML = `
             <img src="${image.path}" alt="${image.name}" onerror="this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2224%22 height%3D%2224%22 viewBox%3D%220 0 24 24%22%3E%3Cpath fill%3D%22%23CCC%22 d%3D%22M21.9 21.9l-8.9-8.9-8.9 8.9H21.9zM2.1 2.1v19.8L21.9 2.1H2.1z%22%2F%3E%3C%2Fsvg%3E'">
@@ -126,6 +130,10 @@ function renderImages(images) {
 
     // 创建网格视图项
     const gridItem = document.createElement("div");
+    gridItem.setAttribute(
+      "data-vscode-context",
+      '{"preventDefaultContextMenuItems": true, "webviewSection": "image" }'
+    );
     gridItem.className = "grid-item";
     gridItem.innerHTML = `
             <div class="image-container">

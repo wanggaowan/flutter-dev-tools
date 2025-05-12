@@ -33,15 +33,6 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "resource-manger",
-          "title": "Resource Manager",
-          "icon": "media/Resources.svg"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "flutterProjectView.addFile",
@@ -68,26 +59,29 @@
         "icon": "$(refresh)"
       }
     ],
-    "views": {
-      "explorer": [
+    "menus": {
+      "commandPalette": [
         {
-          "id": "flutterProjectView",
-          "name": "Flutter",
-          "icon": "media/flutter.svg",
-          "when": "flutterDevTools.projectTreeViewEnable"
+          "command": "flutterProjectView.addFile",
+          "when": "false"
+        },
+        {
+          "command": "flutterProjectView.addFolder",
+          "when": "false"
+        },
+        {
+          "command": "flutterProjectView.refresh",
+          "when": "false"
+        },
+        {
+          "command": "flutterProjectView.delete",
+          "when": "false"
+        },
+        {
+          "command": "flutterProjectView.rename",
+          "when": "false"
         }
       ],
-      "resource-manger": [
-        {
-          "id": "imagePreviewView",
-          "type": "webview",
-          "name": "Image",
-          "icon": "media/resource.svg",
-          "when": "flutterDevTools.projectTreeViewEnable"
-        }
-      ]
-    },
-    "menus": {
       "view/title": [
         {
           "command": "flutterProjectView.addFile",
@@ -125,6 +119,34 @@
           "command": "flutterProjectView.delete",
           "when": "view == flutterProjectView",
           "group": "fileOp@4"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "flutterProjectView",
+          "name": "Flutter",
+          "icon": "media/flutter.svg",
+          "when": "flutterDevTools.projectTreeViewEnable"
+        }
+      ],
+      "resource-manger": [
+        {
+          "id": "imagePreviewView",
+          "type": "webview",
+          "name": "Image",
+          "icon": "media/resource.svg",
+          "when": "flutterDevTools.projectTreeViewEnable"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "resource-manger",
+          "title": "Resource Manager",
+          "icon": "media/Resources.svg"
         }
       ]
     }

@@ -1,9 +1,9 @@
 import { url } from "inspector";
 import * as vscode from "vscode";
 import * as fs from "fs";
-import { disposeAll } from "../../utils/utils";
+import { disposeAll } from "../utils/utils";
 import path from "path";
-import OpenFileUtils from "../../utils/open-file-utils";
+import OpenFileUtils from "../utils/open-file-utils";
 
 export class ImagePreviewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -115,8 +115,7 @@ export class ImagePreviewProvider
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this._extensionUri,
-        "src",
-        "views",
+        "media",
         "image-preview",
         "script.js"
       )
@@ -125,8 +124,7 @@ export class ImagePreviewProvider
     const styleResetUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this._extensionUri,
-        "src",
-        "views",
+        "media",
         "image-preview",
         "styles.css"
       )
@@ -147,7 +145,7 @@ export class ImagePreviewProvider
                 <title>图片预览</title>
                 <link rel="stylesheet" href="${styleResetUri}">
             </head>
-            <body>
+            <body data-vscode-context='{"preventDefaultContextMenuItems": true }'>
                 <div class="container">
                     <div class="view-controls">
                         <input type="text" class="search-input" id="search-input" placeholder="搜索图片..."/>

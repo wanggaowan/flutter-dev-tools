@@ -12,7 +12,7 @@ import {
 } from "./constants.contexts";
 import { disposeAll } from "./utils/utils";
 import Logger from "./utils/logger";
-import { ImagePreviewProvider } from "./views/image-preview/image-preview-provider";
+import { ImagePreviewProvider } from "./views/image-preview-provider";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
