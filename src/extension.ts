@@ -3,16 +3,26 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { FlutterProjectProvider } from "./views/project-tree-data-provider";
-import OpenFileUtils from "./utils/open-file-utils";
 import {
   COMMAND_OPEN_FILE,
   IMAGE_PREVIEW_VIEW_ID,
-  PROJECT_TREE_VIEW_ENABLE_CONTEXT,
+  IS_FLUTTER_PROJECT,
   PROJECT_TREE_VIEW_ID,
 } from "./constants.contexts";
-import { disposeAll } from "./utils/utils";
+import { disposeAll, openFile } from "./utils/utils";
 import Logger from "./utils/logger";
 import { ImagePreviewProvider } from "./views/image-preview-provider";
+import { FlutterSdk } from "./sdk";
+import { json } from "stream/consumers";
+import { JsonToDart } from "./command/json-to-dart";
+import { ClassGen } from "./command/class-gen";
+import { setContext } from "./utils/build-in-command-utils";
+
+let _sdk: FlutterSdk | undefined;
+
+export function getSdk(): FlutterSdk | undefined {
+  return _sdk;
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -21,74 +31,78 @@ export async function activate(
   isRestart = false
 ) {
   Logger.i(isRestart ? "插件重新激活" : "插件已激活");
-  let disposable = vscode.commands.registerCommand(
-    COMMAND_OPEN_FILE,
-    (filePath: any) => OpenFileUtils.open(filePath)
-  );
-  context.subscriptions.push(disposable);
-  registerFlutterPorjectView(context);
-  registerImagePreviewView(context);
-
   // 注册项目目录变更监听
   context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(async (f) => {
+    vscode.workspace.onDidChangeWorkspaceFolders(async f => {
       await deactivate(true);
       disposeAll(context.subscriptions);
       await activate(context, true);
     })
   );
-}
 
-export async function deactivate(isRestart = false) {
-  Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
-  void vscode.commands.executeCommand(
-    "setContext",
-    PROJECT_TREE_VIEW_ENABLE_CONTEXT,
-    false
-  );
-}
-
-// 注册flutter专属项目视图
-function registerFlutterPorjectView(context: vscode.ExtensionContext) {
-  const rootPath =
-    vscode.workspace.workspaceFolders &&
-    vscode.workspace.workspaceFolders.length > 0
-      ? vscode.workspace.workspaceFolders[0].uri.fsPath
-      : undefined;
-  if (rootPath) {
-    let exist = fs.existsSync(rootPath + "/" + "pubspec.yaml");
-    if (exist) {
-      void vscode.commands.executeCommand(
-        "setContext",
-        PROJECT_TREE_VIEW_ENABLE_CONTEXT,
-        true
-      );
-
-      let provider = new FlutterProjectProvider(rootPath);
-      context.subscriptions.push(provider);
-      let treeView = vscode.window.createTreeView(PROJECT_TREE_VIEW_ID, {
-        treeDataProvider: provider,
-      });
-      provider.bindTreeView(treeView);
-      provider.refresh();
-      context.subscriptions.push(treeView);
-    }
-  }
-}
-
-// 注册图片预览视图
-function registerImagePreviewView(context: vscode.ExtensionContext) {
   const rootPath =
     vscode.workspace.workspaceFolders &&
     vscode.workspace.workspaceFolders.length > 0
       ? vscode.workspace.workspaceFolders[0].uri
       : undefined;
-  let provider = new ImagePreviewProvider(
-    context,
-    rootPath,
-    context.extensionUri
+
+  if (!rootPath) {
+    return;
+  }
+
+  let exist = fs.existsSync(
+    vscode.Uri.joinPath(rootPath, "pubspec.yaml").fsPath
   );
-  context.subscriptions.push(provider);
+
+  if (!exist) {
+    return;
+  }
+
+  let example: vscode.Uri | undefined;
+  let exapmlePath = vscode.Uri.joinPath(rootPath, "example", "pubspec.yaml");
+  if (fs.existsSync(exapmlePath.fsPath)) {
+    example = vscode.Uri.joinPath(rootPath, "example");
+  }
+  _sdk = new FlutterSdk(context, rootPath, example);
+  setContext(IS_FLUTTER_PROJECT, true);
+  registerFlutterPorjectView(_sdk);
+  registerImagePreviewView(_sdk);
+
+  // 注册命令
+  let disposable = vscode.commands.registerCommand(COMMAND_OPEN_FILE, openFile);
+  context.subscriptions.push(disposable);
+
+  disposable = new JsonToDart();
+  context.subscriptions.push(disposable);
+
+  disposable = new ClassGen();
+  context.subscriptions.push(disposable);
+}
+
+export async function deactivate(isRestart = false) {
+  Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
+  _sdk = undefined;
+  setContext(IS_FLUTTER_PROJECT, false);
+}
+
+// 注册flutter专属项目视图
+function registerFlutterPorjectView(sdk: FlutterSdk) {
+  let provider = new FlutterProjectProvider(sdk);
+  let treeView = vscode.window.createTreeView(PROJECT_TREE_VIEW_ID, {
+    treeDataProvider: provider,
+  });
+  provider.bindTreeView(treeView);
+  sdk.context.subscriptions.push(treeView);
+}
+
+// 注册图片预览视图
+function registerImagePreviewView(sdk: FlutterSdk) {
+  const rootPath =
+    vscode.workspace.workspaceFolders &&
+    vscode.workspace.workspaceFolders.length > 0
+      ? vscode.workspace.workspaceFolders[0].uri
+      : undefined;
+  let provider = new ImagePreviewProvider(sdk);
   let treeView = vscode.window.registerWebviewViewProvider(
     IMAGE_PREVIEW_VIEW_ID,
     provider,
@@ -98,5 +112,5 @@ function registerImagePreviewView(context: vscode.ExtensionContext) {
       },
     }
   );
-  context.subscriptions.push(treeView);
+  sdk.context.subscriptions.push(treeView);
 }

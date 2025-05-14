@@ -13,6 +13,7 @@ import {
 } from "../constants.contexts";
 import { closeFileEditor, disposeAll } from "../utils/utils";
 import Logger from "../utils/logger";
+import { FlutterSdk } from "../sdk";
 
 /**
  * Flutter专属的项目视图
@@ -28,7 +29,9 @@ export class FlutterProjectProvider
   private treeView: vscode.TreeView<FileTreeItem | undefined> | undefined =
     undefined;
 
-  constructor(private workspaceRoot: string) {
+  constructor(private readonly sdk: FlutterSdk) {
+    sdk.context.subscriptions.push(this);
+
     let disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_REFRESH,
       () => {
@@ -45,25 +48,25 @@ export class FlutterProjectProvider
 
     disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_ADD_FILE,
-      (uri) => this.createFileCommand(uri)
+      uri => this.createFileCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_ADD_FOLDER,
-      (uri) => this.createFolderCommand(uri)
+      uri => this.createFolderCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_RENAME,
-      (uri) => this.renameCommand(uri)
+      uri => this.renameCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
       COMMAND_PROJECT_VIEW_DELETE_FILE,
-      (uri) => this.deleteFile(uri)
+      uri => this.deleteFile(uri)
     );
     this.disposableList.push(disposable);
   }
@@ -83,7 +86,7 @@ export class FlutterProjectProvider
     if (element) {
       rootPath = element.path;
     } else {
-      rootPath = this.workspaceRoot;
+      rootPath = this.sdk.workspace.fsPath;
     }
 
     if (!rootPath) {
@@ -93,23 +96,23 @@ export class FlutterProjectProvider
     let dirs: FileTreeItem[] = [];
     let files: FileTreeItem[] = [];
     fs.readdirSync(rootPath)
-      .filter((value) => {
+      .filter(value => {
         return this.fileCouldShow(
           rootPath,
           value,
-          this.isDirectory(rootPath + "/" + value)
+          this.isDirectory(path.join(rootPath, value))
         );
       })
-      .forEach((value) => {
+      .forEach(value => {
         let collapsibleState: vscode.TreeItemCollapsibleState;
-        let path = rootPath + "/" + value;
-        if (this.isDirectory(path)) {
+        let pathStr = path.join(rootPath, value);
+        if (this.isDirectory(pathStr)) {
           collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         } else {
           collapsibleState = vscode.TreeItemCollapsibleState.None;
         }
         let dependency = new FileTreeItem(
-          path,
+          pathStr,
           value,
           collapsibleState,
           element
@@ -174,7 +177,7 @@ export class FlutterProjectProvider
         return false;
       }
 
-      if (
+      let ignore =
         name == "android" ||
         name == "ios" ||
         name == "web" ||
@@ -182,9 +185,9 @@ export class FlutterProjectProvider
         name == "windows" ||
         name == "linux" ||
         name == "unix" ||
-        name == "ohos"
-      ) {
-        if (parent == this.workspaceRoot || parent.endsWith("example")) {
+        name == "ohos";
+      if (ignore) {
+        if (parent == this.sdk.workspace.fsPath || parent.endsWith("example")) {
           return false;
         }
       }
@@ -207,16 +210,16 @@ export class FlutterProjectProvider
       uri = uri.parent;
     }
 
-    let find = treeView.selection.find((value) => value == uri);
+    let find = treeView.selection.find(value => value == uri);
     const fileName = await vscode.window.showInputBox({
       placeHolder: "请输入文件名",
       prompt: "创建新文件",
-      validateInput: (value) => {
+      validateInput: value => {
         if (!value) return "文件名不能为空";
         if (value.includes("/") || value.includes("\\"))
           return "文件名不能包含路径分隔符";
-        let path = find?.path ?? this.workspaceRoot;
-        if (fs.existsSync(path + "/" + value)) {
+        let pathStr = find?.path ?? this.sdk.workspace.fsPath;
+        if (fs.existsSync(path.join(pathStr, value))) {
           return "已存在同名文件";
         }
         return null;
@@ -238,16 +241,16 @@ export class FlutterProjectProvider
       uri = uri.parent;
     }
 
-    let find = treeView.selection.find((value) => value == uri);
+    let find = treeView.selection.find(value => value == uri);
     const fileName = await vscode.window.showInputBox({
       placeHolder: "请输入文件夹名",
       prompt: "创建新文件夹",
-      validateInput: (value) => {
+      validateInput: value => {
         if (!value) return "文件夹名不能为空";
         if (value.includes("/") || value.includes("\\"))
           return "文件夹名不能包含路径分隔符";
-        let path = find?.path ?? this.workspaceRoot;
-        if (fs.existsSync(path + "/" + value)) {
+        let pathStr = find?.path ?? this.sdk.workspace.fsPath;
+        if (fs.existsSync(path.join(pathStr, value))) {
           return "已存在同名文件夹";
         }
         return null;
@@ -263,19 +266,19 @@ export class FlutterProjectProvider
     parent: FileTreeItem | undefined,
     isFolder: boolean
   ) {
-    let path: string;
+    let pathStr: string;
     if (parent) {
-      path = parent.path;
+      pathStr = parent.path;
     } else {
-      path = this.workspaceRoot;
+      pathStr = this.sdk.workspace.fsPath;
     }
-    path += "/" + fileName;
+    pathStr += path.sep + fileName;
 
     try {
       if (isFolder) {
-        fs.mkdirSync(path);
+        fs.mkdirSync(pathStr);
       } else {
-        fs.writeFileSync(path, "");
+        fs.writeFileSync(pathStr, "");
       }
 
       if (parent && this.treeView) {
@@ -311,17 +314,17 @@ export class FlutterProjectProvider
       return;
     }
 
-    let find = treeView.selection.find((value) => value == uri);
+    let find = treeView.selection.find(value => value == uri);
     const fileName = await vscode.window.showInputBox({
       placeHolder: "请输新的名称",
       value: uri.label,
       prompt: "重命名",
-      validateInput: (value) => {
+      validateInput: value => {
         if (!value) return "名称不能为空";
         if (value.includes("/") || value.includes("\\"))
           return "名称不能包含路径分隔符";
-        let path = find?.parent?.path ?? this.workspaceRoot;
-        if (fs.existsSync(path + "/" + value)) {
+        let pathStr = find?.parent?.path ?? this.sdk.workspace.fsPath;
+        if (fs.existsSync(path.join(pathStr, value))) {
           return uri.contextValue == Folder_NODE_CONTEXT
             ? "已存在同名文件夹"
             : "已存在同名文件";
@@ -331,9 +334,9 @@ export class FlutterProjectProvider
     });
 
     if (!fileName) return;
-    let parentPath = uri.parent?.path ?? this.workspaceRoot;
+    let parentPath = uri.parent?.path ?? this.sdk.workspace.fsPath;
     try {
-      fs.renameSync(uri.path, parentPath + "/" + fileName);
+      fs.renameSync(uri.path, path.join(parentPath, fileName));
       this.refresh();
       closeFileEditor(uri.path);
     } catch (e) {}

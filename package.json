@@ -68,6 +68,24 @@
         "command": "flutterProjectView.refresh",
         "title": "刷新",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "flutterDevTools.json2dart",
+        "title": "json to dart"
+      },
+      {
+        "command": "flutterDevTools.genConstructor",
+        "title": "创建构造函数"
+      },
+      {
+        "command": "flutterDevTools.genSerialization",
+        "title": "创建序列化方法"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "flutterDevTools.editorContext",
+        "label": "Flutter"
       }
     ],
     "menus": {
@@ -90,6 +108,18 @@
         },
         {
           "command": "flutterProjectView.rename",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.json2dart",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.genConstructor",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.genSerialization",
           "when": "false"
         }
       ],
@@ -131,6 +161,29 @@
           "when": "view == flutterProjectView",
           "group": "fileOp@4"
         }
+      ],
+      "editor/context": [
+        {
+          "submenu": "flutterDevTools.editorContext",
+          "when": "flutterDevTools.isFlutterProject"
+        }
+      ],
+      "flutterDevTools.editorContext": [
+        {
+          "command": "flutterDevTools.json2dart",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "flutterDevTools"
+        },
+        {
+          "command": "flutterDevTools.genConstructor",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "flutterDevTools@2"
+        },
+        {
+          "command": "flutterDevTools.genSerialization",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "flutterDevTools@3"
+        }
       ]
     },
     "views": {
@@ -139,7 +192,7 @@
           "id": "flutterProjectView",
           "name": "Flutter",
           "icon": "media/flutter.svg",
-          "when": "flutterDevTools.projectTreeViewEnable"
+          "when": "flutterDevTools.isFlutterProject"
         }
       ],
       "resource-manger": [
@@ -148,7 +201,7 @@
           "type": "webview",
           "name": "Image",
           "icon": "media/resource.svg",
-          "when": "flutterDevTools.projectTreeViewEnable"
+          "when": "flutterDevTools.isFlutterProject"
         }
       ]
     },
@@ -163,13 +216,40 @@
     },
     "configuration": [
       {
-        "title": "Flutter资源配置",
-        "order": 1,
+        "title": "资源配置",
         "properties": {
           "flutterDevTools.imageSrcPath": {
             "type": "string",
             "default": "assets/images",
             "description": "存放图片资源的目录,此目录为基于Flutter项目根目录的相对目录",
+            "scope": "window"
+          }
+        }
+      },
+      {
+        "title": "json to dart",
+        "properties": {
+          "flutterDevTools.classSuffix": {
+            "type": "string",
+            "default": "Entity",
+            "description": "生成的类后缀",
+            "scope": "window"
+          },
+          "flutterDevTools.generateDoc": {
+            "type": "boolean",
+            "default": true,
+            "description": "json值是否作为备注",
+            "scope": "window"
+          }
+        }
+      },
+      {
+        "title": "class生成配置",
+        "properties": {
+          "flutterDevTools.converts": {
+            "type": "string",
+            "default": "",
+            "description": "生成序列化方法时，@JsonSerializable(converters: xxx)中converters名称",
             "scope": "window"
           }
         }
@@ -189,6 +269,10 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0",
+    "vscode-uri": "^3.1.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.99.0",

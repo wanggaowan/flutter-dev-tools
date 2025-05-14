@@ -1,9 +1,10 @@
 import { url } from "inspector";
 import * as vscode from "vscode";
 import * as fs from "fs";
-import { disposeAll } from "../utils/utils";
+import { disposeAll, openFile } from "../utils/utils";
 import path from "path";
-import OpenFileUtils from "../utils/open-file-utils";
+import { FlutterSdk } from "../sdk";
+import { ConfigUtils } from "../utils/config-utils";
 
 export class ImagePreviewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -13,14 +14,13 @@ export class ImagePreviewProvider
   private webview?: vscode.Webview;
   private imageDir?: string;
 
-  constructor(
-    private context: vscode.ExtensionContext,
-    private workspaceRoot: vscode.Uri | undefined,
-    extensionUri: vscode.Uri
-  ) {
-    this._extensionUri = extensionUri;
+  constructor(private readonly sdk: FlutterSdk) {
+    sdk.context.subscriptions.push(this);
+
+    this._extensionUri = sdk.context.extensionUri;
     this.initDefaultImageDirPath();
-    const onThemeChange = vscode.window.onDidChangeActiveColorTheme((theme) => {
+
+    const onThemeChange = vscode.window.onDidChangeActiveColorTheme(theme => {
       if (this.webview) {
         let isDark = this.isDarkTheme;
         this.webview.postMessage({
@@ -36,13 +36,16 @@ export class ImagePreviewProvider
   }
 
   private async initDefaultImageDirPath() {
-    let path = this.context.workspaceState.get<string>("imageDirPath");
+    let path = this.sdk.context.workspaceState.get<string>("imageDirPath");
     if (!path || !fs.existsSync(path)) {
-      path = vscode.workspace.getConfiguration("flutterDevTools").imageSrcPath;
+      path = ConfigUtils.imageSrcPath;
+      if (path) {
+        path = vscode.Uri.joinPath(this.sdk.workspace, path).fsPath;
+      }
     }
 
-    if (!path && this.workspaceRoot) {
-      path = this.workspaceRoot.path + "/assets/images";
+    if (!path) {
+      path = vscode.Uri.joinPath(this.sdk.workspace, "assets", "images").fsPath;
     }
 
     this.imageDir = path;
@@ -61,7 +64,7 @@ export class ImagePreviewProvider
     this.webview = webviewView.webview;
     this.changeWebviewOptions(webviewView.webview, this.imageDir);
     webviewView.webview.onDidReceiveMessage(
-      (message) => {
+      message => {
         switch (message.type) {
           case "refresh":
             this.refresh();
@@ -70,7 +73,7 @@ export class ImagePreviewProvider
             this.changeDir();
             break;
           case "preview":
-            this.preview(message.url);
+            openFile(message.url);
             break;
         }
       },
@@ -94,16 +97,8 @@ export class ImagePreviewProvider
   }
 
   private changeWebviewOptions(webview: vscode.Webview, imagesDir?: string) {
-    let localRes: vscode.Uri[] = [this._extensionUri];
-    if (this.workspaceRoot) {
-      localRes.push(this.workspaceRoot);
-    }
-
-    if (
-      this.workspaceRoot &&
-      imagesDir &&
-      !imagesDir.startsWith(this.workspaceRoot.path)
-    ) {
+    let localRes: vscode.Uri[] = [this._extensionUri, this.sdk.workspace];
+    if (imagesDir && !imagesDir.startsWith(this.sdk.workspace.fsPath)) {
       localRes.push(vscode.Uri.file(imagesDir));
     }
 
@@ -114,7 +109,7 @@ export class ImagePreviewProvider
   }
 
   private updateImageDir(webview: vscode.Webview, imagesDir: string) {
-    if (this.workspaceRoot && !imagesDir.startsWith(this.workspaceRoot.path)) {
+    if (!imagesDir.startsWith(this.sdk.workspace.fsPath)) {
       this.changeWebviewOptions(webview, imagesDir);
     }
     webview.postMessage({
@@ -238,14 +233,10 @@ export class ImagePreviewProvider
 
   // 获取当前预览图片目录的相对路径
   private getImageRelPath(): string {
-    if (this.imageDir && this.workspaceRoot) {
-      let path = this.workspaceRoot.path;
-      if (this.imageDir.startsWith(path)) {
-        let relPath = this.imageDir.substring(path.length);
-        if (relPath.startsWith("/") || relPath.startsWith("\\")) {
-          relPath = relPath.substring(1);
-        }
-        return relPath;
+    if (this.imageDir) {
+      let rootPath = this.sdk.workspace.fsPath;
+      if (this.imageDir.startsWith(rootPath)) {
+        return path.relative(rootPath, this.imageDir);
       }
     }
     return this.imageDir ?? "";
@@ -270,9 +261,9 @@ export class ImagePreviewProvider
     try {
       let files = fs.readdirSync(dir);
       let dirs: string[] = [];
-      let rootPath = this.workspaceRoot?.path;
+      let rootPath = this.sdk.workspace.fsPath;
       for (let name of files) {
-        let filePath = dir + "/" + name;
+        let filePath = path.join(dir, name);
         if (fs.statSync(filePath).isDirectory()) {
           dirs.push(filePath);
         } else if (
@@ -306,20 +297,19 @@ export class ImagePreviewProvider
     filePath: string,
     rootPath?: string
   ): ImageData {
-    let indexOf = filePath.lastIndexOf("/");
     let previewPath = filePath;
-    let path = this.webview
+    let pathStr = this.webview
       ? this.webview.asWebviewUri(vscode.Uri.file(filePath)).toString()
       : "";
     let showPath: string;
     if (rootPath && filePath.startsWith(rootPath)) {
-      showPath = filePath.substring(rootPath.length + 1);
+      showPath = path.relative(rootPath, filePath);
     } else {
       showPath = filePath;
     }
     return {
       name: name,
-      path: path,
+      path: pathStr,
       showPath: showPath,
       previewPath: previewPath,
     };
@@ -348,8 +338,8 @@ export class ImagePreviewProvider
     let defaultUri: vscode.Uri | undefined;
     if (this.imageDir && fs.existsSync(this.imageDir)) {
       defaultUri = vscode.Uri.file(this.imageDir);
-    } else if (this.workspaceRoot) {
-      defaultUri = this.workspaceRoot;
+    } else {
+      defaultUri = this.sdk.workspace;
     }
 
     let uris = await vscode.window.showOpenDialog({
@@ -364,15 +354,11 @@ export class ImagePreviewProvider
     }
 
     if (this.webview) {
-      this.imageDir = uris[0].path;
-      this.context.workspaceState.update("imageDirPath", this.imageDir);
+      this.imageDir = uris[0].fsPath;
+      this.sdk.context.workspaceState.update("imageDirPath", this.imageDir);
       this.updateImageDir(this.webview, this.imageDir);
       this.refresh();
     }
-  }
-
-  private preview(path: string) {
-    OpenFileUtils.open(path);
   }
 }
 
