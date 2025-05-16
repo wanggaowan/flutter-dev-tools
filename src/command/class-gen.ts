@@ -8,6 +8,8 @@ import Logger from "../utils/logger";
 import { getSdk } from "../extension";
 import { DartSdk, Outline } from "../sdk";
 import { ForamtUtils } from "../utils/format-utils";
+import { ConfigUtils } from "../utils/config-utils";
+import path from "path";
 
 /**
  * 类生成相关，如生成构造函数，序列化方法等
@@ -24,7 +26,7 @@ export class ClassGen {
           title: "Gen Constructor",
         },
         async (_, token) => {
-          this.genConstructor();
+          ClassGen.genConstructor(true);
         }
       )
     );
@@ -38,7 +40,7 @@ export class ClassGen {
           title: "Gen Serialization",
         },
         async (_, token) => {
-          this.genSerialization();
+          ClassGen.genSerialization(true);
         }
       )
     );
@@ -49,7 +51,9 @@ export class ClassGen {
     disposeAll(this.disposableList);
   }
 
-  private async genConstructor() {
+  private static async getClassOutline(): Promise<
+    { editor: vscode.TextEditor; outline: Outline } | undefined
+  > {
     let editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
@@ -72,6 +76,36 @@ export class ClassGen {
       return;
     }
 
+    return {
+      editor,
+      outline: classOutline,
+    };
+  }
+
+  /**
+   * 生成构造函数
+   * @param format 生成完成后是否格式化
+   */
+  static async genConstructor(format?: boolean): Promise<boolean> {
+    let editor = await this.genConstructorInner();
+    if (editor) {
+      if (format) {
+        await ForamtUtils.formatDocument(editor.document.uri);
+        editor.document.save();
+      }
+    }
+    return editor ? true : false;
+  }
+
+  private static async genConstructorInner(): Promise<
+    vscode.TextEditor | undefined
+  > {
+    let value = await this.getClassOutline();
+    if (!value) return;
+
+    let editor = value.editor;
+    let classOutline = value.outline;
+
     let children = classOutline.children ?? [];
     let fieldOutlines: Outline[] = [];
     for (let element of children) {
@@ -85,7 +119,8 @@ export class ClassGen {
       }
     }
 
-    let content = `\n${classOutline.element.name}({`;
+    let hasField = fieldOutlines.length > 0;
+    let content = `\n${classOutline.element.name}(${hasField ? "{" : ""}`;
     fieldOutlines.forEach(outline => {
       if (outline.element.returnType?.includes("?") == false) {
         content += `required this.${outline.element.name},`;
@@ -93,7 +128,7 @@ export class ClassGen {
         content += `this.${outline.element.name},`;
       }
     });
-    content += "});\n";
+    content += `${hasField ? "}" : ""});\n`;
     let indexOf = editor.document
       .getText(DartSdk.range2VsRange(classOutline.range))
       .indexOf("{");
@@ -107,17 +142,164 @@ export class ClassGen {
       let end = classOutline.range.end;
       pos = new vscode.Position(end.line, end.character - 1);
     }
-    await editor.edit(edit => {
+    let succeed = await editor.edit(edit => {
       edit.insert(pos, content);
     });
-    await ForamtUtils.formatDocument(editor.document.uri);
+    return succeed ? editor : undefined;
   }
 
-  private async genSerialization() {
-    
+  /**
+   * 生成序列化函数
+   *
+   * @param format 生成完成后是否格式化
+   */
+  static async genSerialization(format?: boolean): Promise<boolean> {
+    let editor: vscode.TextEditor | undefined;
+    editor = await this.genConstructorInner();
+    if (editor) {
+      await editor.document.save();
+      await new Promise(resove => setTimeout(resove, 300));
+    }
+
+    let editor2 = await this.genSerializationInner();
+    if (editor2) {
+      editor = editor2;
+    }
+    if (editor) {
+      if (format) {
+        await ForamtUtils.formatDocument(editor.document.uri);
+        await editor.document.save();
+      }
+    }
+
+    return editor ? true : false;
   }
 
-  private getselectionClass(
+  private static async genSerializationInner(): Promise<
+    vscode.TextEditor | undefined
+  > {
+    let value = await this.getClassOutline();
+    if (!value) return;
+
+    let editor = value.editor;
+    let classOutline = value.outline;
+    let children = classOutline.children ?? [];
+    let existFromJson = false;
+    let existToJson = false;
+    let existFromJsonList = false;
+    for (let element of children) {
+      if (element.element.kind == "METHOD") {
+        if (element.element.name == "toJson") {
+          existToJson = true;
+        } else if (element.element.name == "fromJsonList") {
+          existFromJsonList = true;
+        }
+      } else if (element.element.kind == "CONSTRUCTOR") {
+        if (element.element.name == `${classOutline.element.name}.fromJson`) {
+          existFromJson = true;
+        }
+      }
+    }
+
+    let content = "";
+    if (!existFromJson) {
+      content =
+        `factory ${classOutline.element.name}.fromJson(Map<String, dynamic> json) =>` +
+        `\n    _$${classOutline.element.name}FromJson(json);`;
+    }
+
+    if (!existToJson) {
+      content += `\n\nMap<String, dynamic> toJson() => _$${classOutline.element.name}ToJson(this);`;
+    }
+
+    if (!existFromJsonList) {
+      content +=
+        `\n\nstatic List<${classOutline.element.name}> fromJsonList(List<dynamic> json) => json` +
+        `\n    .map((e) => ${classOutline.element.name}.fromJson(e as Map<String, dynamic>))` +
+        "\n    .toList();";
+    }
+
+    let succeed = false;
+    if (content.length > 0) {
+      let indexOf = editor.document
+        .getText(DartSdk.range2VsRange(classOutline.range))
+        .indexOf("{");
+      let end = classOutline.range.end;
+      let pos = new vscode.Position(end.line, end.character - 1);
+      succeed = await editor.edit(edit => {
+        edit.insert(pos, "\n\n" + content);
+      });
+    }
+
+    let text = editor.document.getText(
+      DartSdk.range2VsRange(classOutline.range)
+    );
+    if (!text.includes("@JsonSerializable")) {
+      let start = classOutline.range.start;
+      let pos = new vscode.Position(start.line, 0);
+      let content = "@JsonSerializable(";
+      let converts = ConfigUtils.converts;
+      if (converts && converts.length > 0) {
+        content += `converters: ${converts}`;
+      }
+      content += ")\n";
+      succeed =
+        (await editor.edit(edit => {
+          edit.insert(pos, `\n${content}`);
+        })) || succeed;
+    }
+
+    text = editor.document.getText();
+    let part = `part '${classOutline.element.name}.g.dart'`;
+    if (!text.includes(part)) {
+      let indexOf = text.lastIndexOf("import");
+      let pos: vscode.Position;
+      if (indexOf == -1) {
+        pos = new vscode.Position(0, 0);
+      } else {
+        let at = editor.document.positionAt(indexOf);
+        pos = at.with(at.line + 1, 0);
+        part = "\n\n" + part;
+      }
+
+      succeed = (await this.genGPart(editor)) || succeed;
+    }
+
+    return succeed ? editor : undefined;
+  }
+
+  static async genGPart(editor: vscode.TextEditor): Promise<boolean> {
+    let fileName = editor.document.fileName;
+    let indexOf = fileName.lastIndexOf(path.sep);
+    if (indexOf != -1) {
+      fileName = fileName.substring(indexOf + 1);
+    }
+    indexOf = fileName.indexOf(".");
+    if (indexOf != -1) {
+      fileName = fileName.substring(0, indexOf);
+    }
+
+    let part = `part '${fileName}.g.dart'`;
+    let text = editor.document.getText();
+    if (!text.includes(part)) {
+      let indexOf = text.lastIndexOf("import");
+      let pos: vscode.Position;
+      if (indexOf == -1) {
+        pos = new vscode.Position(0, 0);
+      } else {
+        let at = editor.document.positionAt(indexOf);
+        pos = at.with(at.line + 1, 0);
+        part = "\n\n" + part;
+      }
+
+      return await editor.edit(edit => {
+        edit.insert(pos, `${part};\n`);
+      });
+    }
+    return false;
+  }
+
+  private static getselectionClass(
     outlines: Outline[] | undefined,
     selection: vscode.Selection
   ): Outline | undefined {

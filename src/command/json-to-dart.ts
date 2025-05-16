@@ -5,6 +5,7 @@ import Logger from "../utils/logger";
 import { ConfigUtils } from "../utils/config-utils";
 import { ForamtUtils } from "../utils/format-utils";
 import { executeDocumentSymbolProvider } from "../utils/build-in-command-utils";
+import { ClassGen } from "./class-gen";
 
 export class JsonToDart implements vscode.Disposable {
   private disposableList: vscode.Disposable[] = [];
@@ -94,34 +95,154 @@ export class JsonToDart implements vscode.Disposable {
         location: vscode.ProgressLocation.Window,
         title: `Converting json to dart`,
       },
-      async (_, token) => {
-        let pos = this.findInseartLine(editor, classSymbol);
-        await this.parse(
+      (_, token) => {
+        return this.genDartClass(
           editor,
-          pos,
-          jsonObj,
-          className + suffix,
+          classSymbol,
+          className,
           suffix,
-          classSymbol ? false : true,
-          ConfigUtils.generateDoc
+          jsonObj
         );
-        return ForamtUtils.formatDocument(editor.document.uri);
       }
     );
   }
 
-  private async parse(
+  private async genDartClass(
     editor: vscode.TextEditor,
-    insertPos: vscode.Position,
+    classSymbol: vscode.DocumentSymbol | undefined,
+    className: string,
+    suffix: string,
+    jsonObj: any
+  ) {
+    let pos = this.findInseartLine(editor, classSymbol);
+    let genDoc = ConfigUtils.genDoc;
+    let genConstructor = ConfigUtils.genConstructor;
+    let genSerialization = ConfigUtils.genSerialization;
+    let converts = ConfigUtils.converts;
+    let otherClass: Map<string, object>;
+
+    let content = "";
+    let succeed = false;
+    if (classSymbol) {
+      let returnValue = await this.parse(
+        jsonObj,
+        className + suffix,
+        suffix,
+        genDoc,
+        false,
+        false,
+        false,
+        null
+      );
+
+      succeed = await editor.edit(edit => {
+        edit.insert(pos, returnValue.content + "\n");
+      });
+      if (succeed) {
+        await editor.document.save();
+        await new Promise(resove => setTimeout(resove, 300));
+      }
+
+      if (genSerialization) {
+        succeed = (await ClassGen.genSerialization()) || succeed;
+      } else if (genConstructor) {
+        succeed = (await ClassGen.genConstructor()) || succeed;
+      }
+      otherClass = returnValue.otherClass;
+    } else {
+      let returnValue = await this.parse(
+        jsonObj,
+        className + suffix,
+        suffix,
+        genDoc,
+        true,
+        genConstructor,
+        genSerialization,
+        converts
+      );
+      content = returnValue.content;
+      otherClass = returnValue.otherClass;
+    }
+
+    let contents = await this.genOtherClass(
+      otherClass,
+      suffix,
+      genDoc,
+      genConstructor,
+      genSerialization,
+      converts
+    );
+
+    if (contents.length > 0) {
+      content = content + contents.join("\n\n");
+    }
+
+    if (content.length > 0) {
+      pos = new vscode.Position(editor.document.lineCount + 1, 0);
+      succeed =
+        (await editor.edit(edit => {
+          edit.insert(pos, content + "\n");
+        })) || succeed;
+    }
+
+    if (genSerialization && !classSymbol) {
+      succeed = (await ClassGen.genGPart(editor)) || succeed;
+    }
+
+    if (succeed) {
+      await ForamtUtils.formatDocument(editor.document.uri);
+      await editor.document.save();
+    }
+  }
+
+  private async genOtherClass(
+    otherClass: Map<string, object>,
+    classSuffix: string,
+    genDoc: boolean,
+    genConstructor: boolean,
+    genSerialization: boolean,
+    converts: string | undefined | null
+  ): Promise<string[]> {
+    let contents: string[] = [];
+    for (const element of otherClass) {
+      let returnValue = await this.parse(
+        element[1],
+        element[0],
+        classSuffix,
+        true,
+        genDoc,
+        genConstructor,
+        genSerialization,
+        converts
+      );
+      contents.push(returnValue.content);
+      if (returnValue.otherClass.size > 0) {
+        let result = await this.genOtherClass(
+          returnValue.otherClass,
+          classSuffix,
+          genDoc,
+          genConstructor,
+          genSerialization,
+          converts
+        );
+        contents.push(...result);
+      }
+    }
+    return contents;
+  }
+
+  private async parse(
     jsonObj: any,
     className: string,
     classSuffix: string,
+    genDoc: boolean,
     genClass: boolean,
-    genDoc: boolean
-  ) {
+    genConstructor: boolean,
+    genSerialization: boolean,
+    converts: string | undefined | null
+  ): Promise<{ content: string; otherClass: Map<string, object> }> {
     let contents: string[] = [];
     let otherClass: Map<string, object> = new Map();
-
     for (let key of Object.keys(jsonObj)) {
       let value = jsonObj[key];
       let type = typeof value;
@@ -169,26 +290,47 @@ export class JsonToDart implements vscode.Disposable {
     }
 
     let content = contents.join("\n");
+
+    if (genConstructor) {
+      let keys = Object.keys(jsonObj);
+      let hasField = keys.length > 0;
+      let constructor = `\n${className}(${hasField ? "{" : ""}`;
+      for (let key of keys) {
+        constructor += `this.${key},`;
+      }
+      constructor += `${hasField ? "}" : ""});\n\n`;
+      content = constructor + content;
+    }
+
+    if (genSerialization) {
+      let serial =
+        `factory ${className}.fromJson(Map<String, dynamic> json) =>` +
+        `\n    _$${className}FromJson(json);`;
+
+      serial += `\n\nMap<String, dynamic> toJson() => _$${className}ToJson(this);`;
+
+      serial +=
+        `\n\nstatic List<${className}> fromJsonList(List<dynamic> json) => json` +
+        `\n    .map((e) => ${className}.fromJson(e as Map<String, dynamic>))` +
+        "\n    .toList();";
+
+      content += "\n\n" + serial;
+    }
+
     if (genClass) {
-      content = `\nclass ${className} {\n${content}\n}`;
+      if (genSerialization) {
+        let convertStr =
+          converts && converts.length > 0 ? `converters: ${converts}` : "";
+        content = `\n@JsonSerializable(${convertStr})\nclass ${className} {\n${content}\n}`;
+      } else {
+        content = `\nclass ${className} {\n${content}\n}`;
+      }
     }
 
-    await editor.edit(edit => {
-      edit.insert(insertPos, content + "\n");
-    });
-
-    for (const element of otherClass) {
-      let pos = new vscode.Position(editor.document.lineCount + 1, 0);
-      await this.parse(
-        editor,
-        pos,
-        element[1],
-        element[0],
-        classSuffix,
-        true,
-        genDoc
-      );
-    }
+    return {
+      content,
+      otherClass,
+    };
   }
 
   private getFieldName(jsonKey: string): { key: string; doc: string } {

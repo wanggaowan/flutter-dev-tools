@@ -16,22 +16,46 @@ export class ConfigUtils {
     return vscode.workspace.getConfiguration("flutterDevTools").imageSrcPath;
   }
 
+  /**
+   * json转dart时，新生成的类后缀
+   */
   static get classSuffix(): string {
     return (
       vscode.workspace.getConfiguration("flutterDevTools").classSuffix ?? ""
     );
   }
 
-  static get generateDoc(): boolean {
+  /**
+   * json转dart时，json value是否作为备注
+   */
+  static get genDoc(): boolean {
     return (
-      vscode.workspace.getConfiguration("flutterDevTools").generateDoc ?? true
+      vscode.workspace.getConfiguration("flutterDevTools").genDoc ?? true
     );
   }
 
-  static get generateConstructor(): boolean {
+  /**
+   * json转dart时，是否生成构造函数
+   */
+  static get genConstructor(): boolean {
     return (
-      vscode.workspace.getConfiguration("flutterDevTools")
-        .generateConstructor ?? true
+      vscode.workspace.getConfiguration("flutterDevTools").genConstructor ?? true
     );
+  }
+
+  /**
+   * json转dart时，是否生成序列化方法
+   */
+  static get genSerialization(): boolean {
+    return (
+      vscode.workspace.getConfiguration("flutterDevTools").genSerialization ?? true
+    );
+  }
+
+  /**
+   * 生成类序列化方法时，默认配置的@JsonSerializable(converters: xxx)中converters的值
+   */
+  static get converts(): string | undefined | null {
+    return vscode.workspace.getConfiguration("flutterDevTools").converts;
   }
 }

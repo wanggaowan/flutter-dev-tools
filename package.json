@@ -227,6 +227,17 @@
         }
       },
       {
+        "title": "class生成配置",
+        "properties": {
+          "flutterDevTools.converts": {
+            "type": "string",
+            "default": "",
+            "description": "生成序列化方法时，@JsonSerializable(converters: convertersName)中converters名称",
+            "scope": "window"
+          }
+        }
+      },
+      {
         "title": "json to dart",
         "properties": {
           "flutterDevTools.classSuffix": {
@@ -235,21 +246,22 @@
             "description": "生成的类后缀",
             "scope": "window"
           },
-          "flutterDevTools.generateDoc": {
+          "flutterDevTools.genDoc": {
             "type": "boolean",
             "default": true,
             "description": "json值是否作为备注",
             "scope": "window"
-          }
-        }
-      },
-      {
-        "title": "class生成配置",
-        "properties": {
-          "flutterDevTools.converts": {
-            "type": "string",
-            "default": "",
-            "description": "生成序列化方法时，@JsonSerializable(converters: xxx)中converters名称",
+          },
+          "flutterDevTools.genConstructor": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否生成构造函数",
+            "scope": "window"
+          },
+          "flutterDevTools.genSerialization": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否生成序列化方法",
             "scope": "window"
           }
         }
