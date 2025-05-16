@@ -17,6 +17,7 @@ import { json } from "stream/consumers";
 import { JsonToDart } from "./command/json-to-dart";
 import { ClassGen } from "./command/class-gen";
 import { setContext } from "./utils/build-in-command-utils";
+import { TerminalCommand } from "./command/terminal-command";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -76,6 +77,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new ClassGen();
+  context.subscriptions.push(disposable);
+
+  disposable = new TerminalCommand();
   context.subscriptions.push(disposable);
 }
 

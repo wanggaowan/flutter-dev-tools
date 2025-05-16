@@ -1,3 +1,5 @@
+export const EXTENSION_NAME = 'FlutterDevTools';
+
 export const IS_FLUTTER_PROJECT = "flutterDevTools.isFlutterProject";
 
 // flutter项目视图上下文常量
@@ -18,3 +20,6 @@ export const COMMAND_OPEN_FILE = `flutterDevTools.openFile`;
 export const COMMAND_JSON2DART = `flutterDevTools.json2dart`;
 export const COMMAND_GEN_CONSTRUCTOR = `flutterDevTools.genConstructor`;
 export const COMMAND_GEN_SERIALIZATION = `flutterDevTools.genSerialization`;
+export const COMMAND_GEN_G_FILE = `flutterDevTools.genGFile`;
+export const COMMAND_GEN_G_FILE_SINGLE = `flutterDevTools.genGFileSingle`;
+export const COMMAND_SHOW_DEPS = `flutterDevTools.showDeps`;

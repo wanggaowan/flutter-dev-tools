@@ -140,7 +140,7 @@ export class JsonToDart implements vscode.Disposable {
       });
       if (succeed) {
         await editor.document.save();
-        await new Promise(resove => setTimeout(resove, 300));
+        await new Promise(resove=>setTimeout(resove,300));
       }
 
       if (genSerialization) {

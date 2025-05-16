@@ -69,6 +69,20 @@ export class FlutterProjectProvider
       uri => this.deleteFile(uri)
     );
     this.disposableList.push(disposable);
+
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(sdk.workspace, "**"), // 监听整个工作区
+      false, // 是否忽略创建事件
+      false, // 是否忽略修改事件
+      false // 是否忽略删除事件
+    );
+
+    // 监听创建事件
+    watcher.onDidCreate((uri: vscode.Uri) => this.refresh());
+    // 监听修改事件
+    watcher.onDidChange((uri: vscode.Uri) => this.refresh());
+    // 监听删除事件
+    watcher.onDidDelete((uri: vscode.Uri) => this.refresh());
   }
 
   getTreeItem(element: FileTreeItem): vscode.TreeItem {
@@ -284,7 +298,6 @@ export class FlutterProjectProvider
       if (parent && this.treeView) {
         await this.treeView.reveal(parent, { expand: true });
       }
-      this.refresh();
     } catch (e) {}
   }
 
@@ -298,7 +311,6 @@ export class FlutterProjectProvider
       } else {
         fs.unlinkSync(uri.path);
       }
-      this.refresh();
       closeFileEditor(uri.path);
     } catch (e) {}
   }
@@ -337,7 +349,6 @@ export class FlutterProjectProvider
     let parentPath = uri.parent?.path ?? this.sdk.workspace.fsPath;
     try {
       fs.renameSync(uri.path, path.join(parentPath, fileName));
-      this.refresh();
       closeFileEditor(uri.path);
     } catch (e) {}
   }

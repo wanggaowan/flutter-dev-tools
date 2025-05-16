@@ -80,6 +80,18 @@
       {
         "command": "flutterDevTools.genSerialization",
         "title": "创建序列化方法"
+      },
+      {
+        "command": "flutterDevTools.genGFile",
+        "title": "生成.g.dart文件"
+      },
+      {
+        "command": "flutterDevTools.genGFileSingle",
+        "title": "生成.g.dart文件"
+      },
+      {
+        "command": "flutterDevTools.showDeps",
+        "title": "展示项目依赖树"
       }
     ],
     "submenus": [
@@ -121,6 +133,18 @@
         {
           "command": "flutterDevTools.genSerialization",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.genGFile",
+          "when": "flutterDevTools.isFlutterProject"
+        },
+        {
+          "command": "flutterDevTools.genGFileSingle",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.showDeps",
+          "when": "flutterDevTools.isFlutterProject"
         }
       ],
       "view/title": [
@@ -183,6 +207,16 @@
           "command": "flutterDevTools.genSerialization",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
           "group": "flutterDevTools@3"
+        },
+        {
+          "command": "flutterDevTools.genGFileSingle",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "flutterDevTools@4"
+        },
+        {
+          "command": "flutterDevTools.showDeps",
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "flutterDevTools@5"
         }
       ]
     },
