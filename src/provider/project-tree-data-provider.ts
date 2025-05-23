@@ -1,16 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import {
-  COMMAND_OPEN_FILE,
-  COMMAND_PROJECT_VIEW_ADD_FILE,
-  COMMAND_PROJECT_VIEW_ADD_FOLDER,
-  COMMAND_PROJECT_VIEW_DELETE_FILE,
-  COMMAND_PROJECT_VIEW_REFRESH,
-  COMMAND_PROJECT_VIEW_RENAME,
-  File_NODE_CONTEXT,
-  Folder_NODE_CONTEXT,
-} from "../constants.contexts";
+import * as cons from "../constants.contexts";
 import { closeFileEditor, disposeAll } from "../utils/utils";
 import Logger from "../utils/logger";
 import { FlutterSdk } from "../sdk";
@@ -33,7 +24,7 @@ export class FlutterProjectProvider
     sdk.context.subscriptions.push(this);
 
     let disposable = vscode.commands.registerCommand(
-      COMMAND_PROJECT_VIEW_REFRESH,
+      cons.COMMAND_PROJECT_VIEW_REFRESH,
       () => {
         if (this.isRefresh) {
           return;
@@ -47,25 +38,25 @@ export class FlutterProjectProvider
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
-      COMMAND_PROJECT_VIEW_ADD_FILE,
+      cons.COMMAND_PROJECT_VIEW_ADD_FILE,
       uri => this.createFileCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
-      COMMAND_PROJECT_VIEW_ADD_FOLDER,
+      cons.COMMAND_PROJECT_VIEW_ADD_FOLDER,
       uri => this.createFolderCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
-      COMMAND_PROJECT_VIEW_RENAME,
+      cons.COMMAND_PROJECT_VIEW_RENAME,
       uri => this.renameCommand(uri)
     );
     this.disposableList.push(disposable);
 
     disposable = vscode.commands.registerCommand(
-      COMMAND_PROJECT_VIEW_DELETE_FILE,
+      cons.COMMAND_PROJECT_VIEW_DELETE_FILE,
       uri => this.deleteFile(uri)
     );
     this.disposableList.push(disposable);
@@ -306,7 +297,7 @@ export class FlutterProjectProvider
       return;
     }
     try {
-      if (uri.contextValue == Folder_NODE_CONTEXT) {
+      if (uri.contextValue == cons.Folder_NODE_CONTEXT) {
         fs.rmSync(uri.path, { recursive: true });
       } else {
         fs.unlinkSync(uri.path);
@@ -337,7 +328,7 @@ export class FlutterProjectProvider
           return "名称不能包含路径分隔符";
         let pathStr = find?.parent?.path ?? this.sdk.workspace.fsPath;
         if (fs.existsSync(path.join(pathStr, value))) {
-          return uri.contextValue == Folder_NODE_CONTEXT
+          return uri.contextValue == cons.Folder_NODE_CONTEXT
             ? "已存在同名文件夹"
             : "已存在同名文件";
         }
@@ -365,15 +356,42 @@ class FileTreeItem extends vscode.TreeItem {
     this.resourceUri = vscode.Uri.file(this.path);
     if (this.isFile) {
       this.iconPath = vscode.ThemeIcon.File;
-      this.contextValue = File_NODE_CONTEXT;
+      this.contextValue = this.getFileContextValue(label);
       this.command = {
         arguments: [this.resourceUri],
-        command: COMMAND_OPEN_FILE,
+        command: cons.COMMAND_OPEN_FILE,
         title: "Open File",
       };
     } else {
       this.iconPath = vscode.ThemeIcon.Folder;
-      this.contextValue = Folder_NODE_CONTEXT;
+      this.contextValue = cons.Folder_NODE_CONTEXT;
+    }
+  }
+
+  private getFileContextValue(fileName: string) {
+    let name = fileName.toLowerCase();
+    if (name.endsWith(".dart")) {
+      return cons.File_DART_CONTEXT;
+    } else if (name.endsWith(".arb")) {
+      return cons.File_ARB_CONTEXT;
+    } else if (name.endsWith(".yaml")) {
+      return cons.File_YAML_CONTEXT;
+    } else if (name.endsWith(".md")) {
+      return cons.File_MARKDOWN_CONTEXT;
+    } else if (name.endsWith(".txt")) {
+      return cons.File_TXT_CONTEXT;
+    } else if (name.endsWith(".html")) {
+      return cons.File_HTML_CONTEXT;
+    } else if (name.endsWith(".css")) {
+      return cons.File_CSS_CONTEXT;
+    } else if (name.endsWith(".js")) {
+      return cons.File_JS_CONTEXT;
+    } else if (name.endsWith(".ts")) {
+      return cons.File_TS_CONTEXT;
+    } else if (name.endsWith(".py")) {
+      return cons.File_PYTHON_CONTEXT;
+    } else {
+      return cons.File_OTHER_CONTEXT;
     }
   }
 

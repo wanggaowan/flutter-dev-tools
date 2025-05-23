@@ -92,6 +92,10 @@
       {
         "command": "flutterDevTools.showDeps",
         "title": "展示项目依赖树"
+      },
+      {
+        "command": "flutterDevTools.translateArb",
+        "title": "根据模版arb翻译"
       }
     ],
     "submenus": [
@@ -145,6 +149,17 @@
         {
           "command": "flutterDevTools.showDeps",
           "when": "flutterDevTools.isFlutterProject"
+        },
+        {
+          "command": "flutterDevTools.translateArb",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "flutterDevTools.translateArb",
+          "when": "flutterDevTools.isFlutterProject && resourceExtname == .arb",
+          "group": "z_commands"
         }
       ],
       "view/title": [
@@ -168,22 +183,27 @@
         {
           "command": "flutterProjectView.addFile",
           "when": "view == flutterProjectView",
-          "group": "fileOp@1"
+          "group": "z_commands@1"
         },
         {
           "command": "flutterProjectView.addFolder",
           "when": "view == flutterProjectView",
-          "group": "fileOp@2"
+          "group": "z_commands@2"
         },
         {
           "command": "flutterProjectView.rename",
           "when": "view == flutterProjectView",
-          "group": "fileOp@3"
+          "group": "z_commands@3"
         },
         {
           "command": "flutterProjectView.delete",
           "when": "view == flutterProjectView",
-          "group": "fileOp@4"
+          "group": "z_commands@4"
+        },
+        {
+          "command": "flutterDevTools.translateArb",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.arbFile",
+          "group": "z_commands@5"
         }
       ],
       "editor/context": [
@@ -196,27 +216,42 @@
         {
           "command": "flutterDevTools.json2dart",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "flutterDevTools"
+          "group": "z_commands"
         },
         {
           "command": "flutterDevTools.genConstructor",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "flutterDevTools@2"
+          "group": "z_commands@2"
         },
         {
           "command": "flutterDevTools.genSerialization",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "flutterDevTools@3"
+          "group": "z_commands@3"
         },
         {
           "command": "flutterDevTools.genGFileSingle",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "flutterDevTools@4"
+          "group": "z_commands@4"
         },
         {
           "command": "flutterDevTools.showDeps",
           "when": "flutterDevTools.isFlutterProject",
-          "group": "flutterDevTools@5"
+          "group": "z_commands@5"
+        },
+        {
+          "command": "flutter.task.genl10n",
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "z_commands@6"
+        },
+        {
+          "command": "pub.get",
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "z_commands@7"
+        },
+        {
+          "command": "pub.get.all",
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "z_commands@8"
         }
       ]
     },
@@ -317,20 +352,21 @@
     "test": "vscode-test"
   },
   "dependencies": {
-    "yaml": "^2.7.0",
-    "vscode-uri": "^3.1.0"
+    "@alicloud/alimt20181012": "^1.0.4",
+    "vscode-uri": "^3.1.0",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.99.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
-    "eslint": "^9.23.0",
-    "esbuild": "^0.25.1",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.8.2",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.25.1",
+    "eslint": "^9.23.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.2"
   }
 }

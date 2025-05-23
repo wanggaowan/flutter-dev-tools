@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import * as fs from "fs";
-import { FlutterProjectProvider } from "./views/project-tree-data-provider";
+import { FlutterProjectProvider } from "./provider/project-tree-data-provider";
 import {
   COMMAND_OPEN_FILE,
   IMAGE_PREVIEW_VIEW_ID,
@@ -18,6 +18,7 @@ import { JsonToDart } from "./command/json-to-dart";
 import { ClassGen } from "./command/class-gen";
 import { setContext } from "./utils/build-in-command-utils";
 import { TerminalCommand } from "./command/terminal-command";
+import { TranslateArb } from "./command/translate/translate-arb";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -80,6 +81,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new TerminalCommand();
+  context.subscriptions.push(disposable);
+
+  disposable = new TranslateArb();
   context.subscriptions.push(disposable);
 }
 

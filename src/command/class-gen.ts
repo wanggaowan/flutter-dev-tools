@@ -72,7 +72,7 @@ export class ClassGen {
     const selection = editor.selection;
     let classOutline = this.getselectionClass(outline.children, selection);
     if (!classOutline) {
-      Logger.showNotification("光标所在范围未识别到相关类", "wran");
+      Logger.showNotification("光标所在范围未识别到相关类", "warn");
       return;
     }
 

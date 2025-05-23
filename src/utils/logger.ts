@@ -41,7 +41,7 @@ class Logger {
 
   static showNotification<T extends string>(
     message: string,
-    type: "info" | "wran" | "error" = "info",
+    type: "info" | "warn" | "error" = "info",
     options?: vscode.MessageOptions,
     ...items: T[]
   ): Thenable<T | undefined> {
@@ -51,7 +51,7 @@ class Logger {
       } else {
         return vscode.window.showErrorMessage(message, ...items);
       }
-    } else if (type == "wran") {
+    } else if (type == "warn") {
       if (options) {
         return vscode.window.showWarningMessage(message, options, ...items);
       } else {
