@@ -253,6 +253,10 @@ export class TranslateArb {
         break;
       }
     }
+
+    if (existTranslateFailed) {
+      Logger.showNotification("部分内容未翻译或插入成功，请重试", "warn");
+    }
   }
 
   private static async writeTranslateResult(

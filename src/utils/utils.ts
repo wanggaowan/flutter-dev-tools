@@ -141,8 +141,8 @@ function inferTypeFromText(text: string): vscode.SymbolKind | undefined {
   return undefined;
 }
 
-export function isImage(uri: vscode.Uri): boolean {
-  let path = uri.path.toLowerCase();
+export function isImage(name:string): boolean {
+  let path = name.toLowerCase();
   return (
     path.endsWith("png") ||
     path.endsWith("jpg") ||

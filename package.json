@@ -78,6 +78,18 @@
         "title": "创建构造函数"
       },
       {
+        "command": "flutterDevTools.getter",
+        "title": "Getter"
+      },
+      {
+        "command": "flutterDevTools.setter",
+        "title": "Setter"
+      },
+      {
+        "command": "flutterDevTools.getterAndSetter",
+        "title": "Getter And Setter"
+      },
+      {
         "command": "flutterDevTools.genSerialization",
         "title": "创建序列化方法"
       },
@@ -91,7 +103,7 @@
       },
       {
         "command": "flutterDevTools.showDeps",
-        "title": "展示项目依赖树"
+        "title": "Show Dependencies"
       },
       {
         "command": "flutterDevTools.translateArb",
@@ -153,6 +165,18 @@
         {
           "command": "flutterDevTools.translateArb",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.getter",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.setter",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.getterAndSetter",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -209,49 +233,65 @@
       "editor/context": [
         {
           "submenu": "flutterDevTools.editorContext",
-          "when": "flutterDevTools.isFlutterProject"
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "navigation"
         }
       ],
       "flutterDevTools.editorContext": [
         {
-          "command": "flutterDevTools.json2dart",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "z_commands"
-        },
-        {
           "command": "flutterDevTools.genConstructor",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "z_commands@2"
+          "group": "gen"
+        },
+        {
+          "command": "flutterDevTools.getter",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "gen"
+        },
+        {
+          "command": "flutterDevTools.setter",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "gen"
+        },
+        {
+          "command": "flutterDevTools.getterAndSetter",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "gen"
+        },
+        {
+          "command": "flutterDevTools.json2dart",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "json2dart"
         },
         {
           "command": "flutterDevTools.genSerialization",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "z_commands@3"
+          "group": "json2dart@1"
         },
         {
           "command": "flutterDevTools.genGFileSingle",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "z_commands@4"
+          "group": "json2dart@2"
+        },
+        {
+          "command": "flutter.task.genl10n",
+          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "group": "z_commands"
+        },
+        {
+          "command": "pub.get",
+          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "group": "z_commands@1"
+        },
+        {
+          "command": "pub.get.all",
+          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "group": "z_commands@2"
         },
         {
           "command": "flutterDevTools.showDeps",
           "when": "flutterDevTools.isFlutterProject",
-          "group": "z_commands@5"
-        },
-        {
-          "command": "flutter.task.genl10n",
-          "when": "flutterDevTools.isFlutterProject",
-          "group": "z_commands@6"
-        },
-        {
-          "command": "pub.get",
-          "when": "flutterDevTools.isFlutterProject",
-          "group": "z_commands@7"
-        },
-        {
-          "command": "pub.get.all",
-          "when": "flutterDevTools.isFlutterProject",
-          "group": "z_commands@8"
+          "group": "z_commands@3"
         }
       ]
     },

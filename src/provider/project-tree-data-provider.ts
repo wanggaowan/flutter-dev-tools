@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as cons from "../constants.contexts";
-import { closeFileEditor, disposeAll } from "../utils/utils";
+import { closeFileEditor, disposeAll, isImage } from "../utils/utils";
 import Logger from "../utils/logger";
 import { FlutterSdk } from "../sdk";
 
@@ -390,6 +390,8 @@ class FileTreeItem extends vscode.TreeItem {
       return cons.File_TS_CONTEXT;
     } else if (name.endsWith(".py")) {
       return cons.File_PYTHON_CONTEXT;
+    } else if (isImage(name)) {
+      return cons.File_IMAGE_CONTEXT;
     } else {
       return cons.File_OTHER_CONTEXT;
     }

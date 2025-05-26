@@ -15,6 +15,7 @@ export const File_CSS_CONTEXT = "flutterDevTools.cssFile";
 export const File_JS_CONTEXT = "flutterDevTools.jsFile";
 export const File_TS_CONTEXT = "flutterDevTools.tsFile";
 export const File_PYTHON_CONTEXT = "flutterDevTools.pyFile";
+export const File_IMAGE_CONTEXT = "flutterDevTools.imageFile";
 export const File_OTHER_CONTEXT = "flutterDevTools.otherFile";
 
 export const COMMAND_PROJECT_VIEW_ADD_FILE = `${PROJECT_TREE_VIEW_ID}.addFile`;
@@ -30,6 +31,9 @@ export const IMAGE_PREVIEW_VIEW_ID = "imagePreviewView";
 export const COMMAND_OPEN_FILE = `flutterDevTools.openFile`;
 export const COMMAND_JSON2DART = `flutterDevTools.json2dart`;
 export const COMMAND_GEN_CONSTRUCTOR = `flutterDevTools.genConstructor`;
+export const COMMAND_GETTER = `flutterDevTools.getter`;
+export const COMMAND_SETTER = `flutterDevTools.setter`;
+export const COMMAND_GETTER_AND_SETTER = `flutterDevTools.getterAndSetter`;
 export const COMMAND_GEN_SERIALIZATION = `flutterDevTools.genSerialization`;
 export const COMMAND_GEN_G_FILE = `flutterDevTools.genGFile`;
 export const COMMAND_GEN_G_FILE_SINGLE = `flutterDevTools.genGFileSingle`;

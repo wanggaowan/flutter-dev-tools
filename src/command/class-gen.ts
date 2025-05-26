@@ -3,6 +3,9 @@ import { disposeAll } from "../utils/utils";
 import {
   COMMAND_GEN_CONSTRUCTOR,
   COMMAND_GEN_SERIALIZATION,
+  COMMAND_GETTER,
+  COMMAND_GETTER_AND_SETTER,
+  COMMAND_SETTER,
 } from "../constants.contexts";
 import Logger from "../utils/logger";
 import { getSdk } from "../extension";
@@ -27,6 +30,48 @@ export class ClassGen {
         },
         async (_, token) => {
           ClassGen.genConstructor(true);
+        }
+      )
+    );
+    this.disposableList.push(dispose);
+
+    dispose = vscode.commands.registerCommand(COMMAND_GETTER, () =>
+      vscode.window.withProgress(
+        {
+          cancellable: false,
+          location: vscode.ProgressLocation.Window,
+          title: "Getter",
+        },
+        async (_, token) => {
+          ClassGen.getter();
+        }
+      )
+    );
+    this.disposableList.push(dispose);
+
+    dispose = vscode.commands.registerCommand(COMMAND_SETTER, () =>
+      vscode.window.withProgress(
+        {
+          cancellable: false,
+          location: vscode.ProgressLocation.Window,
+          title: "Setter",
+        },
+        async (_, token) => {
+          ClassGen.setter();
+        }
+      )
+    );
+    this.disposableList.push(dispose);
+
+    dispose = vscode.commands.registerCommand(COMMAND_GETTER_AND_SETTER, () =>
+      vscode.window.withProgress(
+        {
+          cancellable: false,
+          location: vscode.ProgressLocation.Window,
+          title: "Getter and Setter",
+        },
+        async (_, token) => {
+          ClassGen.getterAndSetter();
         }
       )
     );
@@ -318,4 +363,280 @@ export class ClassGen {
     }
     return undefined;
   }
+
+  private static async getter() {
+    let result = await this.getDocumentOutline();
+    if (!result) {
+      return;
+    }
+
+    let editor = result.editor;
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
+
+    if (!feilds || feilds.length == 0) {
+      Logger.showNotification("请选择要执行Getter操作的字段");
+      return;
+    }
+
+    let succeed = false;
+    let insertLineCount = 1;
+    for (const element of feilds) {
+      for (const field of element.fields) {
+        let fieldName = field.element.name;
+        let getName = fieldName.startsWith("_")
+          ? fieldName.substring(1)
+          : fieldName;
+        let findGet = element.getMethod.find(
+          value => value.element.name == getName
+        );
+        if (findGet) {
+          continue;
+        }
+
+        succeed =
+          (await editor.edit(edit => {
+            let returnName = fieldName;
+            if (!fieldName.startsWith("_")) {
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
+              if (range) {
+                edit.replace(DartSdk.range2VsRange(range), returnName);
+              }
+            }
+
+            let pos = new vscode.Position(
+              field.range.start.line + insertLineCount,
+              0
+            );
+            let content = `${field.element.returnType} get ${getName} => ${returnName};\n`;
+            edit.insert(pos, content);
+            insertLineCount++;
+          })) || succeed;
+      }
+    }
+
+    if (succeed) {
+      await ForamtUtils.formatDocument(editor.document.uri);
+      await editor.document.save();
+    }
+  }
+
+  private static async setter() {
+    let result = await this.getDocumentOutline();
+    if (!result) {
+      return;
+    }
+
+    let editor = result.editor;
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
+
+    if (!feilds || feilds.length == 0) {
+      Logger.showNotification("请选择要执行Setter操作的字段");
+      return;
+    }
+
+    let succeed = false;
+    let insertLineCount = 1;
+    for (const element of feilds) {
+      for (const field of element.fields) {
+        let fieldName = field.element.name;
+        let setName = fieldName.startsWith("_")
+          ? fieldName.substring(1)
+          : fieldName;
+        let findSet = element.setMethod.find(
+          value => value.element.name == setName
+        );
+        if (findSet) {
+          continue;
+        }
+
+        succeed =
+          (await editor.edit(edit => {
+            let returnName = fieldName;
+            if (!fieldName.startsWith("_")) {
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
+              if (range) {
+                edit.replace(DartSdk.range2VsRange(range), returnName);
+              }
+            }
+
+            let pos = new vscode.Position(
+              field.range.start.line + insertLineCount,
+              0
+            );
+            let content = `set ${setName}(${field.element.returnType} value) {${returnName} = value;}\n`;
+            edit.insert(pos, content);
+            insertLineCount++;
+          })) || succeed;
+      }
+    }
+
+    if (succeed) {
+      await ForamtUtils.formatDocument(editor.document.uri);
+      await editor.document.save();
+    }
+  }
+
+  private static async getterAndSetter() {
+    let result = await this.getDocumentOutline();
+    if (!result) {
+      return;
+    }
+
+    let editor = result.editor;
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
+
+    if (!feilds || feilds.length == 0) {
+      Logger.showNotification("请选择要执行Getter And Setter操作的字段");
+      return;
+    }
+
+    let succeed = false;
+    let insertLineCount = 1;
+    for (const element of feilds) {
+      for (const field of element.fields) {
+        let fieldName = field.element.name;
+        let setName = fieldName.startsWith("_")
+          ? fieldName.substring(1)
+          : fieldName;
+        let findGet = element.getMethod.find(
+          value => value.element.name == setName
+        );
+
+        let findSet = element.setMethod.find(
+          value => value.element.name == setName
+        );
+
+        if (findGet && findSet) {
+          continue;
+        }
+
+        succeed =
+          (await editor.edit(edit => {
+            let returnName = fieldName;
+            if (!fieldName.startsWith("_")) {
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
+              if (range) {
+                edit.replace(DartSdk.range2VsRange(range), returnName);
+              }
+            }
+
+            let pos = new vscode.Position(
+              field.range.start.line + insertLineCount,
+              0
+            );
+            let content = "";
+            if (!findGet) {
+              content += `${field.element.returnType} get ${setName} => ${returnName};\n`;
+              insertLineCount++;
+            }
+
+            if (!findSet) {
+              content += `set ${setName}(${field.element.returnType} value) {${returnName} = value;}\n`;
+              insertLineCount++;
+            }
+
+            edit.insert(pos, content);
+          })) || succeed;
+      }
+    }
+
+    if (succeed) {
+      await ForamtUtils.formatDocument(editor.document.uri);
+      await editor.document.save();
+    }
+  }
+
+  private static async getDocumentOutline(): Promise<
+    { editor: vscode.TextEditor; outline: Outline } | undefined
+  > {
+    let editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    let sdk = getSdk()?.dartSdk;
+    if (!sdk) {
+      Logger.showNotification("dart sdk未初始化", "error");
+      return;
+    }
+
+    let outline = await sdk.waitForOutline(editor.document);
+    if (!outline) {
+      Logger.showNotification("文件解析失败", "error");
+      return;
+    }
+
+    return {
+      editor,
+      outline: outline,
+    };
+  }
+
+  private static getChosenFields(
+    parent: Outline,
+    selection: vscode.Selection,
+    judgeRange: boolean
+  ): FindField[] | undefined {
+    let outlines = parent.children;
+    if (!outlines || outlines.length == 0) {
+      return undefined;
+    }
+
+    let findFields: FindField[] = [];
+    let outLines: Outline[] = [];
+    let getMethod: Outline[] = [];
+    let setMethod: Outline[] = [];
+    for (let outline of outlines) {
+      if (outline.element.kind == "FIELD") {
+        if (!judgeRange) {
+          outLines.push(outline);
+        } else {
+          let range = DartSdk.range2VsRange(outline.range);
+          if (range.contains(selection) || selection.contains(range)) {
+            outLines.push(outline);
+          }
+        }
+      } else if (outline.element.kind == "GETTER") {
+        getMethod.push(outline);
+      } else if (outline.element.kind == "SETTER") {
+        setMethod.push(outline);
+      } else if (
+        outline.element.kind == "CLASS" ||
+        outline.element.kind == "MIXIN"
+      ) {
+        let range = DartSdk.range2VsRange(outline.range);
+        if (range.contains(selection)) {
+          let result = this.getChosenFields(outline, selection, true);
+          if (result) {
+            findFields.push(...result);
+          }
+        } else if (selection.contains(range)) {
+          let result = this.getChosenFields(outline, selection, false);
+          if (result) {
+            findFields.push(...result);
+          }
+        }
+      }
+    }
+
+    return findFields.length == 0 && outLines.length == 0
+      ? undefined
+      : [
+          {
+            parent,
+            fields: outLines,
+            getMethod,
+            setMethod,
+          },
+          ...findFields,
+        ];
+  }
 }
+
+type FindField = {
+  readonly parent: Outline;
+  readonly fields: Outline[];
+  readonly getMethod: Outline[];
+  readonly setMethod: Outline[];
+};
