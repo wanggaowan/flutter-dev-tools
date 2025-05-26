@@ -46,6 +46,16 @@
   "contributes": {
     "commands": [
       {
+        "command": "flutterDevTools.file.location",
+        "title": "File Location",
+        "icon": "media/location.svg"
+      },
+      {
+        "command": "flutterProjectView.location",
+        "title": "File Location",
+        "icon": "media/location.svg"
+      },
+      {
         "command": "flutterProjectView.addFile",
         "title": "新建文件",
         "icon": "$(file-add)"
@@ -119,6 +129,14 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "flutterDevTools.file.location",
+          "when": "false"
+        },
+        {
+          "command": "flutterProjectView.location",
+          "when": "false"
+        },
+        {
           "command": "flutterProjectView.addFile",
           "when": "false"
         },
@@ -188,6 +206,16 @@
       ],
       "view/title": [
         {
+          "command": "flutterDevTools.file.location",
+          "when": "view == workbench.explorer.fileView",
+          "group": "navigation"
+        },
+        {
+          "command": "flutterProjectView.location",
+          "when": "view == flutterProjectView",
+          "group": "navigation"
+        },
+        {
           "command": "flutterProjectView.addFile",
           "when": "view == flutterProjectView",
           "group": "navigation@1"
@@ -204,6 +232,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "vscodefluttertool.creatMVCFile",
+          "when": "view == flutterProjectView && flutterDevTools.exist.vscodefluttertool",
+          "group": "z_commands"
+        },
         {
           "command": "flutterProjectView.addFile",
           "when": "view == flutterProjectView",
@@ -228,6 +261,16 @@
           "command": "flutterDevTools.translateArb",
           "when": "view == flutterProjectView && viewItem == flutterDevTools.arbFile",
           "group": "z_commands@5"
+        },
+        {
+          "command": "vscodefluttertool.importPic",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder && flutterDevTools.exist.vscodefluttertool",
+          "group": "z_commands@6"
+        },
+        {
+          "command": "vscodefluttertool.deleteImg",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.imageFile && flutterDevTools.exist.vscodefluttertool",
+          "group": "z_commands@7"
         }
       ],
       "editor/context": [
@@ -292,6 +335,11 @@
           "command": "flutterDevTools.showDeps",
           "when": "flutterDevTools.isFlutterProject",
           "group": "z_commands@3"
+        },
+        {
+          "command": "vscodefluttertool.podinstall",
+          "when": "flutterDevTools.isFlutterProject && flutterDevTools.exist.vscodefluttertool",
+          "group": "z_commands@4"
         }
       ]
     },

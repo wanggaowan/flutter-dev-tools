@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as cons from "../constants.contexts";
-import { closeFileEditor, disposeAll, isImage } from "../utils/utils";
+import { closeFileEditor, disposeAll, isImage, openFile } from "../utils/utils";
 import Logger from "../utils/logger";
 import { FlutterSdk } from "../sdk";
 
@@ -19,6 +19,7 @@ export class FlutterProjectProvider
   private disposableList: vscode.Disposable[] = [];
   private treeView: vscode.TreeView<FileTreeItem | undefined> | undefined =
     undefined;
+  private openItems: FileTreeItem[] = [];
 
   constructor(private readonly sdk: FlutterSdk) {
     sdk.context.subscriptions.push(this);
@@ -61,6 +62,28 @@ export class FlutterProjectProvider
     );
     this.disposableList.push(disposable);
 
+    disposable = vscode.commands.registerCommand(
+      cons.COMMAND_PROJECT_VIEW_LOCATION,
+      uri => this.location()
+    );
+    this.disposableList.push(disposable);
+
+    disposable = vscode.workspace.onDidCloseTextDocument(document => {
+      this.openItems = this.openItems.filter(
+        value => value.resourceUri != document.uri
+      );
+    });
+    this.disposableList.push(disposable);
+
+    disposable = vscode.commands.registerCommand(
+      "_tapItem",
+      (item: FileTreeItem) => {
+        this.openItems.push(item);
+        openFile(item.resourceUri);
+      }
+    );
+    this.disposableList.push(disposable);
+
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(sdk.workspace, "**"), // 监听整个工作区
       false, // 是否忽略创建事件
@@ -83,7 +106,51 @@ export class FlutterProjectProvider
   getParent(
     element: FileTreeItem
   ): vscode.ProviderResult<FileTreeItem | undefined> {
+    let parent = element.parent;
+    if (parent) {
+      return element.parent;
+    }
+
+    let pathStr = element.resourceUri?.fsPath;
+    if (!pathStr) {
+      return;
+    }
+
+    let indexOf = pathStr.lastIndexOf(path.sep);
+    if (indexOf != -1) {
+      pathStr = pathStr.substring(0, indexOf);
+    }
+
+    if (pathStr == this.sdk.workspace.fsPath) {
+      return;
+    }
+
+    element.parent = new FileTreeItem(
+      pathStr,
+      path.basename(pathStr),
+      vscode.TreeItemCollapsibleState.None
+    );
+
+    this.addOpenItem(element);
     return element.parent;
+  }
+
+  private async addOpenItem(element: FileTreeItem) {
+    if (
+      element.resourceUri?.path !=
+      vscode.window.activeTextEditor?.document.uri.path
+    ) {
+      return;
+    }
+
+    let find = this.openItems.find(
+      value => value.resourceUri?.path == element.path
+    );
+    
+    if (find) {
+      return;
+    }
+    this.openItems.push(element);
   }
 
   getChildren(element?: FileTreeItem): Thenable<FileTreeItem[]> {
@@ -138,6 +205,7 @@ export class FlutterProjectProvider
 
   dispose() {
     this.treeView = undefined;
+    this.openItems = [];
     disposeAll(this.disposableList);
   }
 
@@ -343,6 +411,33 @@ export class FlutterProjectProvider
       closeFileEditor(uri.path);
     } catch (e) {}
   }
+
+  private async location() {
+    let treeView = this.treeView;
+    if (!treeView) {
+      return;
+    }
+
+    let editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+
+    let find = this.openItems.find(
+      value => value.resourceUri?.path == editor.document.uri.path
+    );
+    if (find) {
+      treeView.reveal(find, { select: true, expand: true });
+    } else {
+      let pathStr = editor.document.uri.fsPath;
+      let item = new FileTreeItem(
+        pathStr,
+        path.basename(pathStr),
+        vscode.TreeItemCollapsibleState.Collapsed
+      );
+      treeView.reveal(item, { select: true, expand: true });
+    }
+  }
 }
 
 class FileTreeItem extends vscode.TreeItem {
@@ -350,7 +445,7 @@ class FileTreeItem extends vscode.TreeItem {
     public readonly path: string,
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly parent?: FileTreeItem
+    public parent?: FileTreeItem
   ) {
     super(label, collapsibleState);
     this.resourceUri = vscode.Uri.file(this.path);
@@ -358,8 +453,8 @@ class FileTreeItem extends vscode.TreeItem {
       this.iconPath = vscode.ThemeIcon.File;
       this.contextValue = this.getFileContextValue(label);
       this.command = {
-        arguments: [this.resourceUri],
-        command: cons.COMMAND_OPEN_FILE,
+        arguments: [this],
+        command: "_tapItem",
         title: "Open File",
       };
     } else {

@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { FlutterProjectProvider } from "./provider/project-tree-data-provider";
 import {
-  COMMAND_OPEN_FILE,
+  COMMAND_EXPLORE_FILE_LOCATION,
   IMAGE_PREVIEW_VIEW_ID,
   IS_FLUTTER_PROJECT,
   PROJECT_TREE_VIEW_ID,
@@ -71,10 +71,7 @@ export async function activate(
   registerImagePreviewView(_sdk);
 
   // 注册命令
-  let disposable = vscode.commands.registerCommand(COMMAND_OPEN_FILE, openFile);
-  context.subscriptions.push(disposable);
-
-  disposable = new JsonToDart();
+  let disposable: vscode.Disposable = new JsonToDart();
   context.subscriptions.push(disposable);
 
   disposable = new ClassGen();
@@ -85,10 +82,27 @@ export async function activate(
 
   disposable = new TranslateArb();
   context.subscriptions.push(disposable);
+
+  disposable = vscode.commands.registerCommand(
+    COMMAND_EXPLORE_FILE_LOCATION,
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      // 关闭其它目录
+      // await vscode.commands.executeCommand(
+      //   "workbench.files.action.collapseExplorerFolders"
+      // );
+      await vscode.commands.executeCommand(
+        "workbench.files.action.showActiveFileInExplorer"
+      );
+    }
+  );
+  context.subscriptions.push(disposable);
 }
 
 export async function deactivate(isRestart = false) {
   Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
+  _sdk?.deactivate();
   _sdk = undefined;
   setContext(IS_FLUTTER_PROJECT, false);
 }

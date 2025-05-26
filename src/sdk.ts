@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { URI } from "vscode-uri";
 import Logger from "./utils/logger";
+import { setContext } from "./utils/build-in-command-utils";
+import { EXIST_VSCODEFLUTTERTOOL } from "./constants.contexts";
 
 export class FlutterSdk {
   readonly dartSdk: DartSdk | undefined;
@@ -14,6 +16,17 @@ export class FlutterSdk {
     if (dartExt) {
       this.dartSdk = new DartSdk(dartExt);
     }
+
+    let exist = vscode.extensions.getExtension(
+      "undefined_publisher.vscodefluttertool"
+    );
+    if (exist) {
+      setContext(EXIST_VSCODEFLUTTERTOOL, true);
+    }
+  }
+
+  deactivate() {
+    setContext(EXIST_VSCODEFLUTTERTOOL, false);
   }
 }
 
