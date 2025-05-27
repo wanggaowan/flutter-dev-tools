@@ -19,6 +19,8 @@ import { ClassGen } from "./command/class-gen";
 import { setContext } from "./utils/build-in-command-utils";
 import { TerminalCommand } from "./command/terminal-command";
 import { TranslateArb } from "./command/translate/translate-arb";
+import { L10nDefinitionProvider } from "./provider/l10n/l10n-definition-provider";
+import { L10nReferenceProvider } from "./provider/l10n/l10n-refrence-provider";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -39,6 +41,20 @@ export async function activate(
       await deactivate(true);
       disposeAll(context.subscriptions);
       await activate(context, true);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMAND_EXPLORE_FILE_LOCATION, async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      // 关闭其它目录
+      // await vscode.commands.executeCommand(
+      //   "workbench.files.action.collapseExplorerFolders"
+      // );
+      await vscode.commands.executeCommand(
+        "workbench.files.action.showActiveFileInExplorer"
+      );
     })
   );
 
@@ -83,20 +99,10 @@ export async function activate(
   disposable = new TranslateArb();
   context.subscriptions.push(disposable);
 
-  disposable = vscode.commands.registerCommand(
-    COMMAND_EXPLORE_FILE_LOCATION,
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-      // 关闭其它目录
-      // await vscode.commands.executeCommand(
-      //   "workbench.files.action.collapseExplorerFolders"
-      // );
-      await vscode.commands.executeCommand(
-        "workbench.files.action.showActiveFileInExplorer"
-      );
-    }
-  );
+  disposable = new L10nDefinitionProvider(_sdk);
+  context.subscriptions.push(disposable);
+
+  disposable = new L10nReferenceProvider(_sdk);
   context.subscriptions.push(disposable);
 }
 

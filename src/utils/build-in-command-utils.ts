@@ -61,6 +61,20 @@ export function executeDocumentSymbolProvider(documentUri: vscode.Uri) {
   );
 }
 
+/**
+ * 获取指定uri文件中指定位置元素的引用
+ */
+export function executeReferenceProvider(
+  uri: vscode.Uri,
+  position: vscode.Position
+) {
+  return vscode.commands.executeCommand<vscode.Location[]>(
+    "vscode.executeReferenceProvider",
+    uri,
+    position
+  );
+}
+
 export type FormatOption = {
   // 使用空格而不是制表符
   insertSpaces?: boolean;

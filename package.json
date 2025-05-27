@@ -289,17 +289,17 @@
         {
           "command": "flutterDevTools.getter",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "gen"
+          "group": "gen@1"
         },
         {
           "command": "flutterDevTools.setter",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "gen"
+          "group": "gen@2"
         },
         {
           "command": "flutterDevTools.getterAndSetter",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
-          "group": "gen"
+          "group": "gen@3"
         },
         {
           "command": "flutterDevTools.json2dart",
@@ -386,7 +386,7 @@
       {
         "title": "class生成配置",
         "properties": {
-          "flutterDevTools.converts": {
+          "flutterDevTools.converters": {
             "type": "string",
             "default": "",
             "description": "生成序列化方法时，@JsonSerializable(converters: convertersName)中converters名称",

@@ -90,6 +90,7 @@ export class FlutterProjectProvider
       false, // 是否忽略修改事件
       false // 是否忽略删除事件
     );
+    this.disposableList.push(watcher);
 
     // 监听创建事件
     watcher.onDidCreate((uri: vscode.Uri) => this.refresh());
@@ -146,7 +147,7 @@ export class FlutterProjectProvider
     let find = this.openItems.find(
       value => value.resourceUri?.path == element.path
     );
-    
+
     if (find) {
       return;
     }

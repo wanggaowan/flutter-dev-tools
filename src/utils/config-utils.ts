@@ -56,6 +56,6 @@ export class ConfigUtils {
    * 生成类序列化方法时，默认配置的@JsonSerializable(converters: xxx)中converters的值
    */
   static get converts(): string | undefined | null {
-    return vscode.workspace.getConfiguration("flutterDevTools").converts;
+    return vscode.workspace.getConfiguration("flutterDevTools").converters;
   }
 }
