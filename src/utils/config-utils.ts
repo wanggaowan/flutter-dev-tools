@@ -17,6 +17,13 @@ export class ConfigUtils {
   }
 
   /**
+   * 获取生成图片引用类文件所在路径
+   */
+  static get imagesFilePath(): string | undefined {
+    return vscode.workspace.getConfiguration("flutterDevTools").imagesFilePath;
+  }
+
+  /**
    * json转dart时，新生成的类后缀
    */
   static get classSuffix(): string {
@@ -29,9 +36,7 @@ export class ConfigUtils {
    * json转dart时，json value是否作为备注
    */
   static get genDoc(): boolean {
-    return (
-      vscode.workspace.getConfiguration("flutterDevTools").genDoc ?? true
-    );
+    return vscode.workspace.getConfiguration("flutterDevTools").genDoc ?? true;
   }
 
   /**
@@ -39,7 +44,8 @@ export class ConfigUtils {
    */
   static get genConstructor(): boolean {
     return (
-      vscode.workspace.getConfiguration("flutterDevTools").genConstructor ?? true
+      vscode.workspace.getConfiguration("flutterDevTools").genConstructor ??
+      true
     );
   }
 
@@ -48,7 +54,8 @@ export class ConfigUtils {
    */
   static get genSerialization(): boolean {
     return (
-      vscode.workspace.getConfiguration("flutterDevTools").genSerialization ?? true
+      vscode.workspace.getConfiguration("flutterDevTools").genSerialization ??
+      true
     );
   }
 

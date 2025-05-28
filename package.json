@@ -378,7 +378,13 @@
           "flutterDevTools.imageSrcPath": {
             "type": "string",
             "default": "assets/images",
-            "description": "存放图片资源的目录,此目录为基于Flutter项目根目录的相对目录",
+            "description": "存放图片资源的目录,此目录为基于当前项目根目录的相对目录",
+            "scope": "window"
+          },
+          "flutterDevTools.imagesFilePath": {
+            "type": "string",
+            "default": "lib/resources/images.dart",
+            "description": "生成图片引用类文件所在路径。此目录为基于当前项目根目录的相对目录",
             "scope": "window"
           }
         }

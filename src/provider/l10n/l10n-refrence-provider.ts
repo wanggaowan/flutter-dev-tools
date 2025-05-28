@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as yaml from "yaml";
 import pathUtils from "path";
-import { DartSdk, FlutterSdk } from "../../sdk";
+import { FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
 import Logger from "../../utils/logger";
 import { executeReferenceProvider } from "../../utils/build-in-command-utils";
@@ -46,22 +46,18 @@ export class L10nReferenceProvider
     this.disposableList.push(disposable);
   }
 
+  dispose() {
+    this.arbDirWatcher?.dispose();
+    this.l10nFileWatcher?.dispose();
+    disposeAll(this.disposableList);
+  }
+
   provideDefinition(
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
   ): vscode.ProviderResult<vscode.Definition | vscode.DefinitionLink[]> {
-    let dartSdk = this.sdk.dartSdk;
-    if (!dartSdk) {
-      return null;
-    }
-    return this.findReference(dartSdk, document, position, undefined, token);
-  }
-
-  dispose() {
-    this.arbDirWatcher?.dispose();
-    this.l10nFileWatcher?.dispose();
-    disposeAll(this.disposableList);
+    return this.findReference(document, position, undefined, token);
   }
 
   provideReferences(
@@ -70,15 +66,10 @@ export class L10nReferenceProvider
     context: vscode.ReferenceContext,
     token: vscode.CancellationToken
   ): vscode.ProviderResult<vscode.Location[]> {
-    let dartSdk = this.sdk.dartSdk;
-    if (!dartSdk) {
-      return null;
-    }
-    return this.findReference(dartSdk, document, position, context, token);
+    return this.findReference(document, position, context, token);
   }
 
   async findReference(
-    dartSdk: DartSdk,
     document: vscode.TextDocument,
     position: vscode.Position,
     context: vscode.ReferenceContext | undefined,
@@ -103,6 +94,10 @@ export class L10nReferenceProvider
     let lines = readText.split(/\r?\n/);
     let pos: vscode.Position | undefined;
     for (let i = 0; i < lines.length; i++) {
+      if (token.isCancellationRequested) {
+        return null;
+      }
+
       let line = lines[i];
       let method = `String get ${key}`;
       let indexOf = line.indexOf(method);
@@ -119,6 +114,10 @@ export class L10nReferenceProvider
         pos
       );
 
+      if (token.isCancellationRequested) {
+        return null;
+      }
+
       if (finds) {
         refrences.push(...finds);
       }
@@ -130,6 +129,10 @@ export class L10nReferenceProvider
     }
 
     for (const element of this.arbFiles) {
+      if (token.isCancellationRequested) {
+        return null;
+      }
+
       try {
         if (element == document.uri.path) {
           continue;

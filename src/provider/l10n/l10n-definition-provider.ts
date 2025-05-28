@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as yaml from "yaml";
 import pathUtils from "path";
-import { DartSdk, FlutterSdk } from "../../sdk";
+import { FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
 import Logger from "../../utils/logger";
 
@@ -34,15 +34,10 @@ export class L10nDefinitionProvider
     position: vscode.Position,
     token: vscode.CancellationToken
   ): vscode.ProviderResult<vscode.Definition | vscode.DefinitionLink[]> {
-    let dartSdk = this.sdk.dartSdk;
-    if (!dartSdk) {
-      return null;
-    }
-    return this.findDefinition(dartSdk, document, position, token);
+    return this.findDefinition(document, position, token);
   }
 
   async findDefinition(
-    dartSdk: DartSdk,
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
@@ -81,6 +76,10 @@ export class L10nDefinitionProvider
     let arbFiles = this.getArbFiles();
     let translateList: vscode.Location[] = [];
     for (const element of arbFiles) {
+      if (token.isCancellationRequested) {
+        return null;
+      }
+
       try {
         let content = fs.readFileSync(element, "utf-8");
         if (!content || content.length == 0) {

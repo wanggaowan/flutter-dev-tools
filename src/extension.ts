@@ -21,6 +21,7 @@ import { TerminalCommand } from "./command/terminal-command";
 import { TranslateArb } from "./command/translate/translate-arb";
 import { L10nDefinitionProvider } from "./provider/l10n/l10n-definition-provider";
 import { L10nReferenceProvider } from "./provider/l10n/l10n-refrence-provider";
+import { ImageDocHoverProvider } from "./provider/image-doc-hover-provider";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -103,6 +104,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new L10nReferenceProvider(_sdk);
+  context.subscriptions.push(disposable);
+
+  disposable = new ImageDocHoverProvider(_sdk);
   context.subscriptions.push(disposable);
 }
 

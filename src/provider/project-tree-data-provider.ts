@@ -419,18 +419,29 @@ export class FlutterProjectProvider
       return;
     }
 
-    let editor = vscode.window.activeTextEditor;
-    if (!editor) {
+    let input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    if (!input) {
+      return;
+    }
+
+    let uri: vscode.Uri | undefined;
+    if (input instanceof vscode.TabInputText) {
+      uri = input.uri;
+    } else if (input instanceof vscode.TabInputCustom) {
+      uri = input.uri;
+    }
+
+    if (!uri) {
       return;
     }
 
     let find = this.openItems.find(
-      value => value.resourceUri?.path == editor.document.uri.path
+      value => value.resourceUri?.path == uri.path
     );
     if (find) {
       treeView.reveal(find, { select: true, expand: true });
     } else {
-      let pathStr = editor.document.uri.fsPath;
+      let pathStr = uri.fsPath;
       let item = new FileTreeItem(
         pathStr,
         path.basename(pathStr),
