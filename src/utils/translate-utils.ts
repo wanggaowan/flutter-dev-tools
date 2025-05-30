@@ -47,7 +47,7 @@ export class TranslateUtils {
 
   /// 修复翻译错误，如占位符为大写，\n，%s翻译后被分开成 \ n,% s等错误
   static fixTranslateError(
-    translate: string | null,
+    translate: string | null | undefined,
     useEscaping?: boolean,
     placeHolderCount?: number
   ): string | null {
@@ -63,7 +63,7 @@ export class TranslateUtils {
 
   /// 修复因翻译，导致占位符被翻译为大写的问题
   private static fixTranslatePlaceHolderStr(
-    translate: string | null,
+    translate: string | null | undefined,
     useEscaping?: Boolean,
     placeHolderCount?: number
   ): string | null {
@@ -112,7 +112,7 @@ export class TranslateUtils {
   }
 
   // 修复格式错误，如\n,翻译成 \ n
-  private static fixNewLineFormatError(text: string | null): string | null {
+  static fixNewLineFormatError(text: string | null): string | null {
     if (!text || text.length == 0) {
       return text;
     }

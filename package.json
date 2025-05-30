@@ -118,6 +118,14 @@
       {
         "command": "flutterDevTools.translateArb",
         "title": "根据模版arb翻译"
+      },
+      {
+        "command": "flutterDevTools.extractL10n",
+        "title": "提取多语言"
+      },
+      {
+        "command": "flutterDevTools.extractL10nAndTranslate",
+        "title": "提取多语言并翻译"
       }
     ],
     "submenus": [
@@ -194,6 +202,14 @@
         },
         {
           "command": "flutterDevTools.getterAndSetter",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.extractL10n",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.extractL10nAndTranslate",
           "when": "false"
         }
       ],
@@ -282,6 +298,16 @@
       ],
       "flutterDevTools.editorContext": [
         {
+          "command": "flutterDevTools.extractL10n",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "a"
+        },
+        {
+          "command": "flutterDevTools.extractL10nAndTranslate",
+          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "group": "a@1"
+        },
+        {
           "command": "flutterDevTools.genConstructor",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
           "group": "gen"
@@ -335,11 +361,6 @@
           "command": "flutterDevTools.showDeps",
           "when": "flutterDevTools.isFlutterProject",
           "group": "z_commands@3"
-        },
-        {
-          "command": "vscodefluttertool.podinstall",
-          "when": "flutterDevTools.isFlutterProject && flutterDevTools.exist.vscodefluttertool",
-          "group": "z_commands@4"
         }
       ]
     },
@@ -425,6 +446,17 @@
             "type": "boolean",
             "default": true,
             "description": "是否生成序列化方法",
+            "scope": "window"
+          }
+        }
+      },
+      {
+        "title": "翻译",
+        "properties": {
+          "flutterDevTools.showRenameDialog": {
+            "type": "boolean",
+            "default": true,
+            "description": "提取多语言时，是否展示重命名弹窗",
             "scope": "window"
           }
         }

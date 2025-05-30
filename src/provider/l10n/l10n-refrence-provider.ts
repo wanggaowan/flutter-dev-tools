@@ -128,6 +128,7 @@ export class L10nReferenceProvider
       return refrences;
     }
 
+    let regex = new RegExp(/".*"\s*:/g);
     for (const element of this.arbFiles) {
       if (token.isCancellationRequested) {
         return null;
@@ -143,16 +144,16 @@ export class L10nReferenceProvider
           continue;
         }
 
-        let values = content.split(/\r?\n/);
-        for (let i = 0; i < values.length; i++) {
-          let element2 = values[i];
-          let keyValue = element2.split(":");
-          if (keyValue.length == 2) {
-            let key2 = keyValue[0].trim();
+        let lines = content.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i];
+          let match = line.match(regex);
+          if (match) {
+            let key2 = match[0].substring(0, match[0].length - 1).trim();
             if (key2 == `"${key}"`) {
               let location = new vscode.Location(
                 vscode.Uri.file(element),
-                new vscode.Position(i, keyValue[0].length - key2.length + 1)
+                new vscode.Position(i, match.index ?? 0)
               );
               refrences.push(location);
             }

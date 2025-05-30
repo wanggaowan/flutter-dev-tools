@@ -40,4 +40,6 @@ export const COMMAND_GEN_G_FILE = `flutterDevTools.genGFile`;
 export const COMMAND_GEN_G_FILE_SINGLE = `flutterDevTools.genGFileSingle`;
 export const COMMAND_SHOW_DEPS = `flutterDevTools.showDeps`;
 export const COMMAND_TRANSLATE_ARB = `flutterDevTools.translateArb`;
+export const COMMAND_EXTRACT_L10N = `flutterDevTools.extractL10n`;
+export const COMMAND_EXTRACT_L10N_AND_TRANSLATE = `flutterDevTools.extractL10nAndTranslate`;
 export const COMMAND_EXPLORE_FILE_LOCATION = `flutterDevTools.file.location`;

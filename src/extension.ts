@@ -22,6 +22,7 @@ import { TranslateArb } from "./command/translate/translate-arb";
 import { L10nDefinitionProvider } from "./provider/l10n/l10n-definition-provider";
 import { L10nReferenceProvider } from "./provider/l10n/l10n-refrence-provider";
 import { ImageDocHoverProvider } from "./provider/image-doc-hover-provider";
+import { ExtractL10n } from "./command/translate/extract-l10n";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -98,6 +99,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new TranslateArb();
+  context.subscriptions.push(disposable);
+
+  disposable = new ExtractL10n();
   context.subscriptions.push(disposable);
 
   disposable = new L10nDefinitionProvider(_sdk);

@@ -65,4 +65,12 @@ export class ConfigUtils {
   static get converts(): string | undefined | null {
     return vscode.workspace.getConfiguration("flutterDevTools").converters;
   }
+
+  /**
+   * 提取多语言时，是否展示重命名弹窗
+   */
+  static get showRenameDialog(): boolean {
+    return vscode.workspace.getConfiguration("flutterDevTools")
+      .showRenameDialog;
+  }
 }

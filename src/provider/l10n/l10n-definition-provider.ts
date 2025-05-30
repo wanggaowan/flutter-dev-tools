@@ -75,6 +75,7 @@ export class L10nDefinitionProvider
     let key = splits[splits.length - 1];
     let arbFiles = this.getArbFiles();
     let translateList: vscode.Location[] = [];
+    regex = new RegExp(/".*"\s*:/g);
     for (const element of arbFiles) {
       if (token.isCancellationRequested) {
         return null;
@@ -89,13 +90,13 @@ export class L10nDefinitionProvider
         let lines = content.split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
           let line = lines[i];
-          let keyValue = line.split(":");
-          if (keyValue.length == 2) {
-            let key2 = keyValue[0].trim();
+          let match = line.match(regex);
+          if (match) {
+            let key2 = match[0].substring(0, match[0].length - 1).trim();
             if (key2 == `"${key}"`) {
               let location = new vscode.Location(
                 vscode.Uri.file(element),
-                new vscode.Position(i, keyValue[0].length - key2.length + 1)
+                new vscode.Position(i, match.index ?? 0)
               );
               translateList.push(location);
             }

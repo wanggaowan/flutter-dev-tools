@@ -6,7 +6,6 @@ import {
   COMMAND_SHOW_DEPS,
   EXTENSION_NAME,
 } from "../constants.contexts";
-import Logger from "../utils/logger";
 import { getSdk } from "../extension";
 import path from "path";
 
@@ -75,6 +74,17 @@ export class TerminalCommand {
     let command = "flutter pub deps";
     const terminal = vscode.window.createTerminal(EXTENSION_NAME);
     terminal.show();
+    terminal.sendText(command);
+  }
+
+  /**
+   * 生成.g.dart文件
+   * @param isSigle 是否只生成当前选择的文件
+   */
+  static genl10n() {
+    // vscode.commands.executeCommand("flutter.task.genl10n");
+    let command = "flutter gen-l10n";
+    const terminal = vscode.window.createTerminal(EXTENSION_NAME);
     terminal.sendText(command);
   }
 }

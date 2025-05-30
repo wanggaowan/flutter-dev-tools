@@ -43,11 +43,6 @@ export class ImageDocHoverProvider
       return null;
     }
 
-    let imagesClassName = ConfigUtils.imagesClassName;
-    if (!imagesClassName || imagesClassName.length == 0) {
-      return null;
-    }
-
     imagesFilePath = pathUtils.join(this.sdk.workspace.fsPath, imagesFilePath);
     let imageRelPath: string[] = [];
     if (imagesFilePath == document.uri.fsPath) {
