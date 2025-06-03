@@ -68,11 +68,23 @@ export function executeReferenceProvider(
   uri: vscode.Uri,
   position: vscode.Position
 ) {
-  return vscode.commands.executeCommand<vscode.Location[]>(
+  return vscode.commands.executeCommand<vscode.Location[] | undefined | null>(
     "vscode.executeReferenceProvider",
     uri,
     position
   );
+}
+
+/**
+ * 获取指定uri文件中指定位置元素的定义
+ */
+export function executeDefinitionProvider(
+  uri: vscode.Uri,
+  position: vscode.Position
+) {
+  return vscode.commands.executeCommand<
+    vscode.Location[] | vscode.DefinitionLink[] | undefined | null
+  >("vscode.executeDefinitionProvider", uri, position);
 }
 
 export type FormatOption = {

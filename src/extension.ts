@@ -23,6 +23,7 @@ import { L10nDefinitionProvider } from "./provider/l10n/l10n-definition-provider
 import { L10nReferenceProvider } from "./provider/l10n/l10n-refrence-provider";
 import { ImageDocHoverProvider } from "./provider/image-doc-hover-provider";
 import { ExtractL10n } from "./command/translate/extract-l10n";
+import { RouterDefinitionProvider } from "./provider/router-definition-provider";
 
 let _sdk: FlutterSdk | undefined;
 
@@ -111,6 +112,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new ImageDocHoverProvider(_sdk);
+  context.subscriptions.push(disposable);
+
+  disposable = new RouterDefinitionProvider(_sdk);
   context.subscriptions.push(disposable);
 }
 

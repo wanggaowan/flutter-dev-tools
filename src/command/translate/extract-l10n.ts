@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { disposeAll, lowerCamelCase } from "../../utils/utils";
+import { disposeAll } from "../../utils/utils";
 import {
   COMMAND_EXTRACT_L10N,
   COMMAND_EXTRACT_L10N_AND_TRANSLATE,
@@ -45,7 +45,8 @@ export class ExtractL10n {
     let pos = editor.selection.active;
     let textLine = editor.document.lineAt(pos);
     let lineText = editor.document.getText(textLine.range);
-    let regex = new RegExp(/(\'.*\'|\".*\")/g);
+    // 匹配""或''字符串
+    let regex = new RegExp(/"((\\")|[^"])*"|'((\\')|[^'])*'/g);
     let matchAll = lineText.matchAll(regex);
     let matchText: string | undefined;
     let matchStartIndex = -1;
