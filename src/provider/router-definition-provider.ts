@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
-import { DartSdk, FlutterSdk, Outline } from "../sdk";
+import { DartSdk, FlutterSdk } from "../sdk";
 import { disposeAll } from "../utils/utils";
-import { executeDefinitionProvider } from "../utils/build-in-command-utils";
+import {
+  executeDefinitionProvider,
+  executeDocumentSymbolProvider,
+} from "../utils/build-in-command-utils";
 
 /**
  * 路由跳转定义位置实现
@@ -74,20 +77,20 @@ export class RouterDefinitionProvider
       position.with(position.line, matchStartIndex),
       position.with(position.line, matchEndIndex)
     );
-    let outline = await dartSdk.waitForOutline(document);
-    outline = this.getClassOutline(outline);
+    let outlines = await executeDocumentSymbolProvider(document.uri);
+    let outline = this.getClassOutline(originSelectionRange, outlines);
     if (!outline) {
       return null;
     }
 
-    let pageList = this.getPageListInfo(outline);
+    let pageList = this.getPageListInfo(document, outline);
     if (pageList.length == 0) {
       return null;
     }
 
     let isInMethod = true;
     for (const element of pageList) {
-      if (DartSdk.range2VsRange(element.range).contains(position)) {
+      if (element.range.contains(position)) {
         isInMethod = false;
         break;
       }
@@ -112,34 +115,32 @@ export class RouterDefinitionProvider
     );
   }
 
-  private getClassOutline(outline: Outline | undefined): Outline | undefined {
-    if (!outline) {
+  private getClassOutline(
+    range: vscode.Range,
+    symbolds: vscode.DocumentSymbol[] | undefined
+  ): vscode.DocumentSymbol | undefined {
+    if (!symbolds || symbolds.length == 0) {
       return;
     }
 
-    if (outline.element.kind == "CLASS" || outline.element.kind == "MIXIN") {
-      return outline;
-    }
-
-    let children = outline.children;
-    if (!children) {
-      return;
-    }
-
-    for (const element of children) {
-      let get = this.getClassOutline(element);
-      if (get) {
-        return get;
+    for (const element of symbolds) {
+      if (element.kind == vscode.SymbolKind.Class) {
+        if (element.range.contains(range)) {
+          return element;
+        }
       }
     }
   }
 
-  private getPageListInfo(outline: Outline) {
+  private getPageListInfo(
+    document: vscode.TextDocument,
+    outline: vscode.DocumentSymbol
+  ) {
     let children = outline.children;
-    let pageList: Outline[] = [];
+    let pageList: vscode.DocumentSymbol[] = [];
     if (children) {
       for (const element of children) {
-        let get = this.getPageList(element);
+        let get = this.getPageList(document, element);
         if (get) {
           pageList.push(get);
         }
@@ -148,12 +149,18 @@ export class RouterDefinitionProvider
     return pageList;
   }
 
-  private getPageList(outline: Outline) {
-    if (outline.element.kind != "METHOD" && outline.element.kind != "FIELD") {
+  private getPageList(
+    document: vscode.TextDocument,
+    outline: vscode.DocumentSymbol
+  ) {
+    if (
+      outline.kind != vscode.SymbolKind.Method &&
+      outline.kind != vscode.SymbolKind.Field
+    ) {
       return;
     }
 
-    let returnType = outline.element.returnType;
+    let returnType = DartSdk.getReturnType(document, outline);
     if (!returnType) {
       return;
     }
@@ -165,7 +172,7 @@ export class RouterDefinitionProvider
 
   private getMatchMethod(
     document: vscode.TextDocument,
-    outline: Outline,
+    outline: vscode.DocumentSymbol,
     matchText: string,
     position: vscode.Position,
     originSelectionRange: vscode.Range
@@ -178,8 +185,8 @@ export class RouterDefinitionProvider
     let regex = new RegExp(/"((\\")|[^"])*"|'((\\')|[^'])*'/g);
     let definitionList: vscode.DefinitionLink[] = [];
     for (const child of children) {
-      if (child.element.kind == "METHOD") {
-        let range = DartSdk.range2VsRange(child.codeRange);
+      if (child.kind == vscode.SymbolKind.Method) {
+        let range = child.range;
         if (range.contains(position)) {
           continue;
         }
@@ -205,7 +212,7 @@ export class RouterDefinitionProvider
 
   private async getMatchList(
     document: vscode.TextDocument,
-    pageList: Outline[],
+    pageList: vscode.DocumentSymbol[],
     matchText: string,
     originSelectionRange: vscode.Range,
     token: vscode.CancellationToken
@@ -221,7 +228,7 @@ export class RouterDefinitionProvider
         return null;
       }
 
-      let range = DartSdk.range2VsRange(page.codeRange);
+      let range = page.range;
       let text = document.getText(range);
       let matchAll = text.matchAll(regex);
 

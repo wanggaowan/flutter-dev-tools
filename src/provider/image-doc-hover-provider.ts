@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import pathUtils from "path";
-import { DartSdk, FlutterSdk, Outline } from "../sdk";
+import { DartSdk, FlutterSdk } from "../sdk";
 import { disposeAll } from "../utils/utils";
 import { ConfigUtils } from "../utils/config-utils";
 

@@ -33,68 +33,61 @@ export class FlutterSdk {
 export class DartSdk {
   constructor(private readonly dartExt: any) {}
 
-  getOutline(uri: vscode.Uri): Outline | undefined {
-    return this.dartExt.exports._privateApi.fileTracker.getOutlineFor(
-      URI.parse(uri.fsPath)
-    );
-  }
-
-  public async waitForOutline(
+  static getReturnType(
     document: vscode.TextDocument,
-    token?: vscode.CancellationToken
-  ): Promise<Outline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.waitForOutline(
-      document,
-      token
-    );
+    symbold: vscode.DocumentSymbol
+  ) {
+    if (
+      symbold.kind != vscode.SymbolKind.Method &&
+      symbold.kind != vscode.SymbolKind.Field
+    ) {
+      return;
+    }
+
+    let text = document.getText(symbold.range);
+    let index = text.indexOf(symbold.name);
+    if (index != -1) {
+      text = text.substring(0, index);
+    }
+
+    //匹配带泛型的返回类型
+    let regex = new RegExp(/\w+<[\s\S]*?>/g);
+    let match = text.match(regex);
+    if (match) {
+      return match[0];
+    }
+
+    let splits = text.split(/\s+/g);
+    for (const element of splits) {
+      if (element == "static" || element == "final") {
+        continue;
+      }
+      return element;
+    }
   }
 
-  // TODO: Change this to withVersion when server sends versions.
-  public async waitForOutlineWithLength(
+  static getMethodType(
     document: vscode.TextDocument,
-    length: number,
-    token: vscode.CancellationToken
-  ): Promise<Outline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.waitForOutlineWithLength(
-      document,
-      length,
-      token
-    );
-  }
+    symbold: vscode.DocumentSymbol
+  ): "SETTER" | "GETTER" | undefined {
+    if (symbold.kind != vscode.SymbolKind.Method) {
+      return;
+    }
 
-  public getFlutterOutlineFor(uri: URI): FlutterOutline | undefined {
-    return this.dartExt.exports._privateApi.fileTracker.getFlutterOutlineFor(
-      URI.parse(uri.fsPath)
-    );
-  }
+    let text = document.getText(symbold.range);
+    let index = text.indexOf(symbold.name);
+    if (index != -1) {
+      text = text.substring(0, index);
+    }
 
-  // TODO: Change this to withVersion when server sends versions.
-  public async waitForFlutterOutlineWithLength(
-    document: vscode.TextDocument,
-    length: number,
-    token: vscode.CancellationToken
-  ): Promise<FlutterOutline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.getFlutterOutlineFor(
-      document,
-      length,
-      token
-    );
-  }
-
-  /**
-   * 将dart sdk返回的range转化为vscode.Range
-   */
-  static range2VsRange(range: Range): vscode.Range {
-    let start = this.position2VsPosition(range.start);
-    let end = this.position2VsPosition(range.end);
-    return new vscode.Range(start, end);
-  }
-
-  /**
-   * 将dart sdk返回的Position转化为vscode.Position
-   */
-  static position2VsPosition(pos: Position): vscode.Position {
-    return new vscode.Position(pos.line, pos.character);
+    let splits = text.split(/\s+/g);
+    for (const element of splits) {
+      if (element == "set") {
+        return "SETTER";
+      } else if (element == "get") {
+        return "GETTER";
+      }
+    }
   }
 
   static getSymbolKindForElementKind(
@@ -152,52 +145,6 @@ export class DartSdk {
         return vscode.SymbolKind.Object;
     }
   }
-}
-
-export interface Position {
-  // Zero-based line number.
-  line: number;
-  // Zero-based line number.
-  character: number;
-}
-
-export interface Range {
-  start: Position;
-  end: Position;
-}
-
-export interface Outline {
-  readonly element: Element;
-  readonly range: Range;
-  readonly codeRange: Range;
-  readonly children: Outline[] | undefined;
-}
-
-export interface Element {
-  readonly name: string;
-  readonly range: Range | undefined;
-  readonly kind: ElementKind;
-  readonly parameters?: string;
-  readonly typeParameters?: string;
-  readonly returnType?: string;
-}
-
-export interface FlutterOutline {
-  readonly attributes?: FlutterOutlineAttribute[];
-  readonly variableName?: string;
-  readonly className?: string;
-  readonly label?: string;
-  readonly dartElement?: Element;
-  readonly range: Range;
-  readonly codeRange: Range;
-  readonly children?: FlutterOutline[];
-  readonly kind: ElementKind;
-}
-
-export interface FlutterOutlineAttribute {
-  name: string;
-  label: string;
-  valueRange: Range;
 }
 
 /**

@@ -155,49 +155,52 @@ export class FlutterProjectProvider
   }
 
   getChildren(element?: FileTreeItem): Thenable<FileTreeItem[]> {
-    let rootPath: string | undefined;
+    let rootPath: vscode.Uri | undefined;
     if (element) {
-      rootPath = element.path;
+      rootPath = element.resourceUri;
     } else {
-      rootPath = this.sdk.workspace.fsPath;
+      rootPath = this.sdk.workspace;
     }
 
     if (!rootPath) {
       return Promise.resolve([]);
     }
 
-    let dirs: FileTreeItem[] = [];
-    let files: FileTreeItem[] = [];
-    fs.readdirSync(rootPath)
-      .filter(value => {
-        return this.fileCouldShow(
-          rootPath,
-          value,
-          this.isDirectory(path.join(rootPath, value))
-        );
-      })
-      .forEach(value => {
-        let collapsibleState: vscode.TreeItemCollapsibleState;
-        let pathStr = path.join(rootPath, value);
-        if (this.isDirectory(pathStr)) {
-          collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-        } else {
-          collapsibleState = vscode.TreeItemCollapsibleState.None;
-        }
-        let dependency = new FileTreeItem(
-          pathStr,
-          value,
-          collapsibleState,
-          element
-        );
+    return new Promise<FileTreeItem[]>(async resolve => {
+      let folders = await vscode.workspace.fs.readDirectory(rootPath);
+      let dirs: FileTreeItem[] = [];
+      let files: FileTreeItem[] = [];
+      folders
+        .filter(value => {
+          return this.fileCouldShow(
+            rootPath.fsPath,
+            value[0],
+            value[1] == vscode.FileType.Directory
+          );
+        })
+        .forEach(value => {
+          let collapsibleState: vscode.TreeItemCollapsibleState;
+          let pathStr = path.join(rootPath.fsPath, value[0]);
+          if (value[1] == vscode.FileType.Directory) {
+            collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+          } else {
+            collapsibleState = vscode.TreeItemCollapsibleState.None;
+          }
+          let dependency = new FileTreeItem(
+            pathStr,
+            value[0],
+            collapsibleState,
+            element
+          );
 
-        if (!dependency.isFile) {
-          dirs.push(dependency);
-        } else {
-          files.push(dependency);
-        }
-      });
-    return Promise.resolve([...dirs, ...files]);
+          if (!dependency.isFile) {
+            dirs.push(dependency);
+          } else {
+            files.push(dependency);
+          }
+        });
+      resolve([...dirs, ...files]);
+    });
   }
 
   readonly onDidChangeTreeData: vscode.Event<
@@ -216,16 +219,6 @@ export class FlutterProjectProvider
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
-  }
-
-  private isDirectory(path: string): boolean {
-    try {
-      const stats = fs.statSync(path);
-      return stats.isDirectory();
-    } catch (error) {
-      // 处理错误
-      return false;
-    }
   }
 
   /**
@@ -340,19 +333,23 @@ export class FlutterProjectProvider
     parent: FileTreeItem | undefined,
     isFolder: boolean
   ) {
-    let pathStr: string;
+    let pathStr: vscode.Uri | undefined;
     if (parent) {
-      pathStr = parent.path;
+      pathStr = parent.resourceUri;
     } else {
-      pathStr = this.sdk.workspace.fsPath;
+      pathStr = this.sdk.workspace;
     }
-    pathStr += path.sep + fileName;
 
+    if (!pathStr) {
+      return;
+    }
+
+    pathStr = vscode.Uri.joinPath(pathStr, fileName);
     try {
       if (isFolder) {
-        fs.mkdirSync(pathStr);
+        await vscode.workspace.fs.createDirectory(pathStr);
       } else {
-        fs.writeFileSync(pathStr, "");
+        await vscode.workspace.fs.writeFile(pathStr, new Uint8Array());
       }
 
       if (parent && this.treeView) {
@@ -362,21 +359,20 @@ export class FlutterProjectProvider
   }
 
   private async deleteFile(uri: FileTreeItem | undefined) {
-    if (uri == undefined) {
+    if (!uri || !uri.resourceUri) {
       return;
     }
     try {
-      if (uri.contextValue == cons.Folder_NODE_CONTEXT) {
-        fs.rmSync(uri.path, { recursive: true });
-      } else {
-        fs.unlinkSync(uri.path);
-      }
+      await vscode.workspace.fs.delete(uri.resourceUri, {
+        recursive: true,
+        useTrash: true,
+      });
       closeFileEditor(uri.path);
     } catch (e) {}
   }
 
   private async renameCommand(uri?: FileTreeItem) {
-    if (uri == undefined) {
+    if (!uri?.resourceUri) {
       return;
     }
 
@@ -406,9 +402,12 @@ export class FlutterProjectProvider
     });
 
     if (!fileName) return;
-    let parentPath = uri.parent?.path ?? this.sdk.workspace.fsPath;
+    let parentPath = uri.parent?.resourceUri ?? this.sdk.workspace;
     try {
-      fs.renameSync(uri.path, path.join(parentPath, fileName));
+      vscode.workspace.fs.rename(
+        uri.resourceUri,
+        vscode.Uri.joinPath(parentPath, fileName)
+      );
       closeFileEditor(uri.path);
     } catch (e) {}
   }
