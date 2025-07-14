@@ -97,7 +97,12 @@ export class ClassGen {
   }
 
   private static async getClassOutline(): Promise<
-    { editor: vscode.TextEditor; outline: vscode.DocumentSymbol } | undefined
+    | {
+        editor: vscode.TextEditor;
+        outlines: vscode.DocumentSymbol[];
+        outline: vscode.DocumentSymbol;
+      }
+    | undefined
   > {
     let editor = vscode.window.activeTextEditor;
     if (!editor) return;
@@ -117,6 +122,7 @@ export class ClassGen {
 
     return {
       editor,
+      outlines: outlines,
       outline: classOutline,
     };
   }
@@ -264,10 +270,14 @@ export class ClassGen {
       });
     }
 
+    DartSdk.mapDocumentSymbolRange(
+      editor.document,
+      classOutline,
+      value.outlines
+    );
     let text = editor.document.getText(classOutline.range);
     if (!text.includes("@JsonSerializable")) {
       let start = classOutline.range.start;
-      let pos = new vscode.Position(start.line, 0);
       let content = "@JsonSerializable(";
       let converts = ConfigUtils.converts;
       if (converts && converts.length > 0) {
@@ -276,26 +286,11 @@ export class ClassGen {
       content += ")\n";
       succeed =
         (await editor.edit(edit => {
-          edit.insert(pos, `\n${content}`);
+          edit.insert(start, `\n${content}`);
         })) || succeed;
     }
 
-    text = editor.document.getText();
-    let part = `part '${classOutline.name}.g.dart'`;
-    if (!text.includes(part)) {
-      let indexOf = text.lastIndexOf("import");
-      let pos: vscode.Position;
-      if (indexOf == -1) {
-        pos = new vscode.Position(0, 0);
-      } else {
-        let at = editor.document.positionAt(indexOf);
-        pos = at.with(at.line + 1, 0);
-        part = "\n\n" + part;
-      }
-
-      succeed = (await this.genGPart(editor)) || succeed;
-    }
-
+    succeed = (await this.genGPart(editor)) || succeed;
     return succeed ? editor : undefined;
   }
 
@@ -313,16 +308,19 @@ export class ClassGen {
     let part = `part '${fileName}.g.dart'`;
     let text = editor.document.getText();
     if (!text.includes(part)) {
-      let indexOf = text.lastIndexOf("import");
-      let pos: vscode.Position;
-      if (indexOf == -1) {
-        pos = new vscode.Position(0, 0);
-      } else {
-        let at = editor.document.positionAt(indexOf);
-        pos = at.with(at.line + 1, 0);
-        part = "\n\n" + part;
+      let range = DartSdk.getLastPartRange(editor.document);
+      if (!range) {
+        range = DartSdk.getLastImportRange(editor.document);
       }
 
+      let pos: vscode.Position;
+      if (range) {
+        pos = range.end.with(range.end.line + 1, 0);
+      } else {
+        pos = new vscode.Position(0, 0);
+      }
+
+      part = "\n\n" + part;
       return await editor.edit(edit => {
         edit.insert(pos, `${part};\n`);
       });
