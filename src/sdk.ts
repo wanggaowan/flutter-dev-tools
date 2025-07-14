@@ -33,68 +33,194 @@ export class FlutterSdk {
 export class DartSdk {
   constructor(private readonly dartExt: any) {}
 
-  getOutline(uri: vscode.Uri): Outline | undefined {
-    return this.dartExt.exports._privateApi.fileTracker.getOutlineFor(
-      URI.parse(uri.fsPath)
-    );
-  }
-
-  public async waitForOutline(
+  static getReturnType(
     document: vscode.TextDocument,
-    token?: vscode.CancellationToken
-  ): Promise<Outline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.waitForOutline(
-      document,
-      token
-    );
+    symbold: vscode.DocumentSymbol
+  ) {
+    if (
+      symbold.kind != vscode.SymbolKind.Method &&
+      symbold.kind != vscode.SymbolKind.Field
+    ) {
+      return;
+    }
+
+    let text = document.getText(symbold.range);
+    let index = text.indexOf(symbold.name);
+    if (index != -1) {
+      text = text.substring(0, index);
+    }
+
+    //匹配带泛型的返回类型
+    let regex = new RegExp(/\w+<[\s\S]*?>/g);
+    let match = text.match(regex);
+    if (match) {
+      return match[0];
+    }
+
+    let splits = text.split(/\s+/g);
+    for (const element of splits) {
+      if (element == "static" || element == "final") {
+        continue;
+      }
+      return element;
+    }
   }
 
-  // TODO: Change this to withVersion when server sends versions.
-  public async waitForOutlineWithLength(
+  static getMethodType(
     document: vscode.TextDocument,
-    length: number,
-    token: vscode.CancellationToken
-  ): Promise<Outline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.waitForOutlineWithLength(
-      document,
-      length,
-      token
-    );
+    symbold: vscode.DocumentSymbol
+  ): "SETTER" | "GETTER" | undefined {
+    if (symbold.kind != vscode.SymbolKind.Method) {
+      return;
+    }
+
+    let text = document.getText(symbold.range);
+    let index = text.indexOf(symbold.name);
+    if (index != -1) {
+      text = text.substring(0, index);
+    }
+
+    let splits = text.split(/\s+/g);
+    for (const element of splits) {
+      if (element == "set") {
+        return "SETTER";
+      } else if (element == "get") {
+        return "GETTER";
+      }
+    }
   }
 
-  public getFlutterOutlineFor(uri: URI): FlutterOutline | undefined {
-    return this.dartExt.exports._privateApi.fileTracker.getFlutterOutlineFor(
-      URI.parse(uri.fsPath)
-    );
-  }
-
-  // TODO: Change this to withVersion when server sends versions.
-  public async waitForFlutterOutlineWithLength(
+  /**
+   * 计算{@link symbol}的真实范围，包含doc和注解等。{@link groups}表示与{@link symbol}同级别的
+   * 所有vscode.DocumentSymbol。{@link parent}表示{@link symbol}的父对象，如果{@link symbol}为
+   * 文档中顶层对象，则没有parent
+   */
+  static mapDocumentSymbolRange(
     document: vscode.TextDocument,
-    length: number,
-    token: vscode.CancellationToken
-  ): Promise<FlutterOutline | undefined> {
-    return this.dartExt.exports._privateApi.fileTracker.getFlutterOutlineFor(
-      document,
-      length,
-      token
+    symbol: vscode.DocumentSymbol,
+    groups: vscode.DocumentSymbol[],
+    parent?: vscode.DocumentSymbol
+  ) {
+    if (groups.length == 0) {
+      return;
+    }
+
+    let index = groups.indexOf(symbol);
+    if (index == -1) {
+      return;
+    }
+
+    if (index == 0) {
+      if (parent) {
+        if (
+          parent.kind == vscode.SymbolKind.Class ||
+          parent.kind == vscode.SymbolKind.Enum
+        ) {
+          let text = document.getText(parent.range);
+          let indexOf = text.indexOf("{");
+          let offset = document.offsetAt(parent.range.start);
+          let pos = document.positionAt(offset + indexOf);
+          if (pos.line + 1 < symbol.range.start.line) {
+            symbol.range = new vscode.Range(
+              pos.with(pos.line + 1, 0),
+              symbol.range.end
+            );
+          }
+        }
+      } else if (symbol.range.start.line > 0) {
+        let zero = new vscode.Position(0, 0);
+        let range = new vscode.Range(zero, symbol.range.start);
+        let regex = new RegExp(/import[\S\s]*?;/g);
+        let text = document.getText(range);
+        let matchAll = text.matchAll(regex);
+        regex = new RegExp(/part[\S\s]*?;/g);
+        let matchAll2 = text.matchAll(regex);
+
+        let lastIndex = 0;
+        for (const element of matchAll) {
+          let end = element.index + element[0].length;
+          if (lastIndex < end) {
+            lastIndex = end;
+          }
+        }
+
+        for (const element of matchAll2) {
+          let end = element.index + element[0].length;
+          if (lastIndex < end) {
+            lastIndex = end;
+          }
+        }
+
+        if (lastIndex == 0) {
+          symbol.range = new vscode.Range(zero, symbol.range.end);
+        } else {
+          let start = document.positionAt(lastIndex);
+          if (start.line + 1 < symbol.range.start.line) {
+            symbol.range = new vscode.Range(
+              start.with(start.line + 1, 0),
+              symbol.range.end
+            );
+          }
+        }
+      }
+      return;
+    }
+    let preSymbol = groups[index - 1];
+    let end = preSymbol.range.end;
+    if (end.line + 1 < symbol.range.start.line) {
+      symbol.range = new vscode.Range(
+        end.with(end.line + 1, 0),
+        symbol.range.end
+      );
+    }
+  }
+
+  /**
+   * 获取文档中最后一个import的范围
+   */
+  static getLastImportRange(document: vscode.TextDocument) {
+    let regex = new RegExp(/import[\S\s]*?;/g);
+    let text = document.getText();
+    let matchAll = text.matchAll(regex);
+    let lastIndexStart = 0;
+    let lastIndexEnd = 0;
+    for (const element of matchAll) {
+      lastIndexStart = element.index;
+      lastIndexEnd = element.index + element[0].length;
+    }
+
+    if (lastIndexStart == 0 && lastIndexEnd == 0) {
+      return;
+    }
+
+    return new vscode.Range(
+      document.positionAt(lastIndexStart),
+      document.positionAt(lastIndexEnd)
     );
   }
 
   /**
-   * 将dart sdk返回的range转化为vscode.Range
+   * 获取文档中最后一个part的范围
    */
-  static range2VsRange(range: Range): vscode.Range {
-    let start = this.position2VsPosition(range.start);
-    let end = this.position2VsPosition(range.end);
-    return new vscode.Range(start, end);
-  }
+  static getLastPartRange(document: vscode.TextDocument) {
+    let regex = new RegExp(/part[\S\s]*?;/g);
+    let text = document.getText();
+    let matchAll = text.matchAll(regex);
+    let lastIndexStart = 0;
+    let lastIndexEnd = 0;
+    for (const element of matchAll) {
+      lastIndexStart = element.index;
+      lastIndexEnd = element.index + element[0].length;
+    }
 
-  /**
-   * 将dart sdk返回的Position转化为vscode.Position
-   */
-  static position2VsPosition(pos: Position): vscode.Position {
-    return new vscode.Position(pos.line, pos.character);
+    if (lastIndexStart == 0 && lastIndexEnd == 0) {
+      return;
+    }
+
+    return new vscode.Range(
+      document.positionAt(lastIndexStart),
+      document.positionAt(lastIndexEnd)
+    );
   }
 
   static getSymbolKindForElementKind(
@@ -152,52 +278,6 @@ export class DartSdk {
         return vscode.SymbolKind.Object;
     }
   }
-}
-
-export interface Position {
-  // Zero-based line number.
-  line: number;
-  // Zero-based line number.
-  character: number;
-}
-
-export interface Range {
-  start: Position;
-  end: Position;
-}
-
-export interface Outline {
-  readonly element: Element;
-  readonly range: Range;
-  readonly codeRange: Range;
-  readonly children: Outline[] | undefined;
-}
-
-export interface Element {
-  readonly name: string;
-  readonly range: Range | undefined;
-  readonly kind: ElementKind;
-  readonly parameters?: string;
-  readonly typeParameters?: string;
-  readonly returnType?: string;
-}
-
-export interface FlutterOutline {
-  readonly attributes?: FlutterOutlineAttribute[];
-  readonly variableName?: string;
-  readonly className?: string;
-  readonly label?: string;
-  readonly dartElement?: Element;
-  readonly range: Range;
-  readonly codeRange: Range;
-  readonly children?: FlutterOutline[];
-  readonly kind: ElementKind;
-}
-
-export interface FlutterOutlineAttribute {
-  name: string;
-  label: string;
-  valueRange: Range;
 }
 
 /**
