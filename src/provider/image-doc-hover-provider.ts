@@ -1,9 +1,14 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import pathUtils from "path";
-import { DartSdk, FlutterSdk } from "../sdk";
+import { FlutterSdk } from "../sdk";
 import { disposeAll } from "../utils/utils";
 import { ConfigUtils } from "../utils/config-utils";
+import {
+  getStaticGetMethodRegex,
+  imageRefRegex,
+  strRegex,
+} from "../utils/regexp-utils";
 
 /**
  * 国际化语言跳转定义位置实现
@@ -48,8 +53,7 @@ export class ImageDocHoverProvider
     if (imagesFilePath == document.uri.fsPath) {
       let textLine = document.lineAt(position);
       let text = document.getText(textLine.range);
-      let regex = new RegExp(/(\'.*\'|\".*\")/g);
-      let matchAll = text.matchAll(regex);
+      let matchAll = text.matchAll(strRegex);
       if (!matchAll) {
         return null;
       }
@@ -75,9 +79,7 @@ export class ImageDocHoverProvider
 
       let textLine = document.lineAt(position.line);
       let text = document.getText(textLine.range);
-      // 匹配Images.xxx格式字符串
-      let regex = new RegExp(/Images\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*/g);
-      let matchAll = text.matchAll(regex);
+      let matchAll = text.matchAll(imageRefRegex);
       if (!matchAll) {
         return null;
       }
@@ -106,11 +108,7 @@ export class ImageDocHoverProvider
 
       let splits = matchText.split(".");
       let key = splits[splits.length - 1];
-      // 匹配：static String get xxx => 'xxx'
-      regex = new RegExp(
-        `static(\n|\r|\\s)+String(\n|\r|\\s)+get(\n|\r|\\s)+${key}(\n|\r|\\s)*=>(\n|\r|\\s)*(\'.*\'|\".*\")`,
-        "g"
-      );
+      let regex = getStaticGetMethodRegex(key);
       let fileContent = fs.readFileSync(imagesFilePath, "utf-8");
       if (token.isCancellationRequested) {
         return null;

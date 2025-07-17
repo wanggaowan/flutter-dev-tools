@@ -12,6 +12,7 @@ import * as yaml from "yaml";
 import { TranslateUtils } from "../../utils/translate-utils";
 import { ConfigUtils } from "../../utils/config-utils";
 import { TerminalCommand } from "../terminal-command";
+import { strRefRegex, strRegex } from "../../utils/regexp-utils";
 
 /**
  * 根据模板文件翻译其它arb文件
@@ -45,9 +46,7 @@ export class ExtractL10n {
     let pos = editor.selection.active;
     let textLine = editor.document.lineAt(pos);
     let lineText = editor.document.getText(textLine.range);
-    // 匹配""或''字符串
-    let regex = new RegExp(/"((\\")|[^"])*"|'((\\')|[^'])*'/g);
-    let matchAll = lineText.matchAll(regex);
+    let matchAll = lineText.matchAll(strRegex);
     let matchText: string | undefined;
     let matchStartIndex = -1;
     let matchEndIndex = -1;
@@ -138,12 +137,11 @@ export class ExtractL10n {
       return;
     }
 
-    regex = new RegExp(/(\$[A-Za-z_][A-Za-z_0-9]*|\${.*})/g);
     let index = 0;
     let placeholderList: string[] = [];
     let keyTranslateText = matchText;
     while (true) {
-      let match = matchText.match(regex);
+      let match = matchText.match(strRefRegex);
       if (match) {
         let text: string = match[0];
         placeholderList.push(text);

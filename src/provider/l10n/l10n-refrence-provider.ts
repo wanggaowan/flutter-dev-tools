@@ -6,6 +6,7 @@ import { FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
 import Logger from "../../utils/logger";
 import { executeReferenceProvider } from "../../utils/build-in-command-utils";
+import { jsonKeyRegex } from "../../utils/regexp-utils";
 
 /**
  * 国际化语言跳转引用位置实现
@@ -128,7 +129,6 @@ export class L10nReferenceProvider
       return refrences;
     }
 
-    let regex = new RegExp(/".*"\s*:/g);
     for (const element of this.arbFiles) {
       if (token.isCancellationRequested) {
         return null;
@@ -147,7 +147,7 @@ export class L10nReferenceProvider
         let lines = content.split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
           let line = lines[i];
-          let match = line.match(regex);
+          let match = line.match(jsonKeyRegex);
           if (match) {
             let key2 = match[0].substring(0, match[0].length - 1).trim();
             if (key2 == `"${key}"`) {

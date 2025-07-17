@@ -9,11 +9,10 @@ import {
   IS_FLUTTER_PROJECT,
   PROJECT_TREE_VIEW_ID,
 } from "./constants.contexts";
-import { disposeAll, openFile } from "./utils/utils";
+import { disposeAll} from "./utils/utils";
 import Logger from "./utils/logger";
 import { ImagePreviewProvider } from "./views/image-preview-provider";
 import { FlutterSdk } from "./sdk";
-import { json } from "stream/consumers";
 import { JsonToDart } from "./command/json-to-dart";
 import { ClassGen } from "./command/class-gen";
 import { setContext } from "./utils/build-in-command-utils";

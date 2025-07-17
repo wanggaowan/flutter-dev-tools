@@ -8,11 +8,11 @@ import {
   COMMAND_SETTER,
 } from "../constants.contexts";
 import Logger from "../utils/logger";
-import { DartSdk } from "../sdk";
+import { getSdk } from "../extension";
+import { DartSdk, PublicOutline } from "../sdk";
 import { ForamtUtils } from "../utils/format-utils";
 import { ConfigUtils } from "../utils/config-utils";
 import path from "path";
-import { executeDocumentSymbolProvider } from "../utils/build-in-command-utils";
 
 /**
  * 类生成相关，如生成构造函数，序列化方法等
@@ -97,24 +97,31 @@ export class ClassGen {
   }
 
   private static async getClassOutline(): Promise<
-    | {
-        editor: vscode.TextEditor;
-        outlines: vscode.DocumentSymbol[];
-        outline: vscode.DocumentSymbol;
-      }
-    | undefined
+    { editor: vscode.TextEditor; outline: PublicOutline } | undefined
   > {
     let editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
-    let outlines = await executeDocumentSymbolProvider(editor.document.uri);
-    if (!outlines) {
-      Logger.showNotification("文件解析失败", "error");
+    let sdk = getSdk()?.dartSdk;
+    if (!sdk) {
+      Logger.showNotification("dart sdk未初始化", "error");
+      return;
+    }
+
+    let outline: PublicOutline | undefined;
+    try {
+      outline = await sdk.getOutline(editor.document);
+      if (!outline) {
+        Logger.showNotification("文件解析失败", "error");
+        return;
+      }
+    } catch (e: any) {
+      Logger.showNotification(e.message, "warn");
       return;
     }
 
     const selection = editor.selection;
-    let classOutline = this.getselectionClass(outlines, selection);
+    let classOutline = this.getselectionClass(outline.children, selection);
     if (!classOutline) {
       Logger.showNotification("光标所在范围未识别到相关类", "warn");
       return;
@@ -122,7 +129,6 @@ export class ClassGen {
 
     return {
       editor,
-      outlines: outlines,
       outline: classOutline,
     };
   }
@@ -152,12 +158,12 @@ export class ClassGen {
     let classOutline = value.outline;
 
     let children = classOutline.children ?? [];
-    let fieldOutlines: vscode.DocumentSymbol[] = [];
+    let fieldOutlines: PublicOutline[] = [];
     for (let element of children) {
-      if (element.kind == vscode.SymbolKind.Field) {
+      if (element.element.kind == "FIELD") {
         fieldOutlines.push(element);
-      } else if (element.kind == vscode.SymbolKind.Constructor) {
-        if (element.name == classOutline.name) {
+      } else if (element.element.kind == "CONSTRUCTOR") {
+        if (element.element.name == classOutline.element.name) {
           // 如果存在工厂构造函数或命名构造函数，则不会阻止创建
           return;
         }
@@ -165,13 +171,12 @@ export class ClassGen {
     }
 
     let hasField = fieldOutlines.length > 0;
-    let content = `\n${classOutline.name}(${hasField ? "{" : ""}`;
+    let content = `\n${classOutline.element.name}(${hasField ? "{" : ""}`;
     fieldOutlines.forEach(outline => {
-      let returnType = DartSdk.getReturnType(editor.document, outline);
-      if (returnType?.includes("?") == false) {
-        content += `required this.${outline.name},`;
+      if (outline.element.returnType?.includes("?") == false) {
+        content += `required this.${outline.element.name},`;
       } else {
-        content += `this.${outline.name},`;
+        content += `this.${outline.element.name},`;
       }
     });
     content += `${hasField ? "}" : ""});\n`;
@@ -230,14 +235,14 @@ export class ClassGen {
     let existToJson = false;
     let existFromJsonList = false;
     for (let element of children) {
-      if (element.kind == vscode.SymbolKind.Method) {
-        if (element.name == "toJson") {
+      if (element.element.kind == "METHOD") {
+        if (element.element.name == "toJson") {
           existToJson = true;
-        } else if (element.name == "fromJsonList") {
+        } else if (element.element.name == "fromJsonList") {
           existFromJsonList = true;
         }
-      } else if (element.kind == vscode.SymbolKind.Constructor) {
-        if (element.name == `${classOutline.name}.fromJson`) {
+      } else if (element.element.kind == "CONSTRUCTOR") {
+        if (element.element.name == `${classOutline.element.name}.fromJson`) {
           existFromJson = true;
         }
       }
@@ -246,23 +251,24 @@ export class ClassGen {
     let content = "";
     if (!existFromJson) {
       content =
-        `factory ${classOutline.name}.fromJson(Map<String, dynamic> json) =>` +
-        `\n    _$${classOutline.name}FromJson(json);`;
+        `factory ${classOutline.element.name}.fromJson(Map<String, dynamic> json) =>` +
+        `\n    _$${classOutline.element.name}FromJson(json);`;
     }
 
     if (!existToJson) {
-      content += `\n\nMap<String, dynamic> toJson() => _$${classOutline.name}ToJson(this);`;
+      content += `\n\nMap<String, dynamic> toJson() => _$${classOutline.element.name}ToJson(this);`;
     }
 
     if (!existFromJsonList) {
       content +=
-        `\n\nstatic List<${classOutline.name}> fromJsonList(List<dynamic> json) => json` +
-        `\n    .map((e) => ${classOutline.name}.fromJson(e as Map<String, dynamic>))` +
+        `\n\nstatic List<${classOutline.element.name}> fromJsonList(List<dynamic> json) => json` +
+        `\n    .map((e) => ${classOutline.element.name}.fromJson(e as Map<String, dynamic>))` +
         "\n    .toList();";
     }
 
     let succeed = false;
     if (content.length > 0) {
+      let indexOf = editor.document.getText(classOutline.range).indexOf("{");
       let end = classOutline.range.end;
       let pos = new vscode.Position(end.line, end.character - 1);
       succeed = await editor.edit(edit => {
@@ -270,11 +276,6 @@ export class ClassGen {
       });
     }
 
-    DartSdk.mapDocumentSymbolRange(
-      editor.document,
-      classOutline,
-      value.outlines
-    );
     let text = editor.document.getText(classOutline.range);
     if (!text.includes("@JsonSerializable")) {
       let start = classOutline.range.start;
@@ -329,15 +330,15 @@ export class ClassGen {
   }
 
   private static getselectionClass(
-    outlines: vscode.DocumentSymbol[] | undefined,
+    outlines: PublicOutline[] | undefined,
     selection: vscode.Selection
-  ): vscode.DocumentSymbol | undefined {
+  ): PublicOutline | undefined {
     if (!outlines || outlines.length == 0) {
       return undefined;
     }
 
     for (let outline of outlines) {
-      if (outline.kind != vscode.SymbolKind.Class) {
+      if (outline.element.kind != "CLASS") {
         continue;
       }
 
@@ -355,12 +356,7 @@ export class ClassGen {
     }
 
     let editor = result.editor;
-    let feilds = this.getChosenFields(
-      result.editor.document,
-      result.outline,
-      editor.selection,
-      true
-    );
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
 
     if (!feilds || feilds.length == 0) {
       Logger.showNotification("请选择要执行Getter操作的字段");
@@ -371,11 +367,13 @@ export class ClassGen {
     let insertLineCount = 1;
     for (const element of feilds) {
       for (const field of element.fields) {
-        let fieldName = field.name;
+        let fieldName = field.element.name;
         let getName = fieldName.startsWith("_")
           ? fieldName.substring(1)
           : fieldName;
-        let findGet = element.getMethod.find(value => value.name == getName);
+        let findGet = element.getMethod.find(
+          value => value.element.name == getName
+        );
         if (findGet) {
           continue;
         }
@@ -384,8 +382,8 @@ export class ClassGen {
           (await editor.edit(edit => {
             let returnName = fieldName;
             if (!fieldName.startsWith("_")) {
-              returnName = `_${field.name}`;
-              let range = field.range;
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
               if (range) {
                 edit.replace(range, returnName);
               }
@@ -395,10 +393,7 @@ export class ClassGen {
               field.range.start.line + insertLineCount,
               0
             );
-            let returnType = DartSdk.getReturnType(editor.document, field);
-            let content = `${
-              returnType ?? ""
-            } get ${getName} => ${returnName};\n`;
+            let content = `${field.element.returnType} get ${getName} => ${returnName};\n`;
             edit.insert(pos, content);
             insertLineCount++;
           })) || succeed;
@@ -418,12 +413,7 @@ export class ClassGen {
     }
 
     let editor = result.editor;
-    let feilds = this.getChosenFields(
-      result.editor.document,
-      result.outline,
-      editor.selection,
-      true
-    );
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
 
     if (!feilds || feilds.length == 0) {
       Logger.showNotification("请选择要执行Setter操作的字段");
@@ -434,11 +424,13 @@ export class ClassGen {
     let insertLineCount = 1;
     for (const element of feilds) {
       for (const field of element.fields) {
-        let fieldName = field.name;
+        let fieldName = field.element.name;
         let setName = fieldName.startsWith("_")
           ? fieldName.substring(1)
           : fieldName;
-        let findSet = element.setMethod.find(value => value.name == setName);
+        let findSet = element.setMethod.find(
+          value => value.element.name == setName
+        );
         if (findSet) {
           continue;
         }
@@ -447,8 +439,8 @@ export class ClassGen {
           (await editor.edit(edit => {
             let returnName = fieldName;
             if (!fieldName.startsWith("_")) {
-              returnName = `_${field.name}`;
-              let range = field.range;
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
               if (range) {
                 edit.replace(range, returnName);
               }
@@ -458,11 +450,7 @@ export class ClassGen {
               field.range.start.line + insertLineCount,
               0
             );
-
-            let returnType = DartSdk.getReturnType(editor.document, field);
-            let content = `set ${setName}(${
-              returnType ?? ""
-            } value) {${returnName} = value;}\n`;
+            let content = `set ${setName}(${field.element.returnType} value) {${returnName} = value;}\n`;
             edit.insert(pos, content);
             insertLineCount++;
           })) || succeed;
@@ -482,12 +470,7 @@ export class ClassGen {
     }
 
     let editor = result.editor;
-    let feilds = this.getChosenFields(
-      result.editor.document,
-      result.outline,
-      editor.selection,
-      true
-    );
+    let feilds = this.getChosenFields(result.outline, editor.selection, true);
 
     if (!feilds || feilds.length == 0) {
       Logger.showNotification("请选择要执行Getter And Setter操作的字段");
@@ -498,13 +481,17 @@ export class ClassGen {
     let insertLineCount = 1;
     for (const element of feilds) {
       for (const field of element.fields) {
-        let fieldName = field.name;
+        let fieldName = field.element.name;
         let setName = fieldName.startsWith("_")
           ? fieldName.substring(1)
           : fieldName;
-        let findGet = element.getMethod.find(value => value.name == setName);
+        let findGet = element.getMethod.find(
+          value => value.element.name == setName
+        );
 
-        let findSet = element.setMethod.find(value => value.name == setName);
+        let findSet = element.setMethod.find(
+          value => value.element.name == setName
+        );
 
         if (findGet && findSet) {
           continue;
@@ -514,8 +501,8 @@ export class ClassGen {
           (await editor.edit(edit => {
             let returnName = fieldName;
             if (!fieldName.startsWith("_")) {
-              returnName = `_${field.name}`;
-              let range = field.range;
+              returnName = `_${field.element.name}`;
+              let range = field.element.range;
               if (range) {
                 edit.replace(range, returnName);
               }
@@ -525,17 +512,14 @@ export class ClassGen {
               field.range.start.line + insertLineCount,
               0
             );
-
-            let returnType =
-              DartSdk.getReturnType(editor.document, field) ?? "";
             let content = "";
             if (!findGet) {
-              content += `${returnType} get ${setName} => ${returnName};\n`;
+              content += `${field.element.returnType} get ${setName} => ${returnName};\n`;
               insertLineCount++;
             }
 
             if (!findSet) {
-              content += `set ${setName}(${returnType} value) {${returnName} = value;}\n`;
+              content += `set ${setName}(${field.element.returnType} value) {${returnName} = value;}\n`;
               insertLineCount++;
             }
 
@@ -551,14 +535,26 @@ export class ClassGen {
   }
 
   private static async getDocumentOutline(): Promise<
-    { editor: vscode.TextEditor; outline: vscode.DocumentSymbol[] } | undefined
+    { editor: vscode.TextEditor; outline: PublicOutline } | undefined
   > {
     let editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
-    let outline = await executeDocumentSymbolProvider(editor.document.uri);
-    if (!outline) {
-      Logger.showNotification("文件解析失败", "error");
+    let sdk = getSdk()?.dartSdk;
+    if (!sdk) {
+      Logger.showNotification("dart sdk未初始化", "error");
+      return;
+    }
+
+    let outline: PublicOutline | undefined;
+    try {
+      outline = await sdk.getOutline(editor.document);
+      if (!outline) {
+        Logger.showNotification("文件解析失败", "error");
+        return;
+      }
+    } catch (e: any) {
+      Logger.showNotification(e.message, "warn");
       return;
     }
 
@@ -569,21 +565,21 @@ export class ClassGen {
   }
 
   private static getChosenFields(
-    document: vscode.TextDocument,
-    outlines: vscode.DocumentSymbol[],
+    parent: PublicOutline,
     selection: vscode.Selection,
     judgeRange: boolean
   ): FindField[] | undefined {
+    let outlines = parent.children;
     if (!outlines || outlines.length == 0) {
       return undefined;
     }
 
     let findFields: FindField[] = [];
-    let outLines: vscode.DocumentSymbol[] = [];
-    let getMethod: vscode.DocumentSymbol[] = [];
-    let setMethod: vscode.DocumentSymbol[] = [];
+    let outLines: PublicOutline[] = [];
+    let getMethod: PublicOutline[] = [];
+    let setMethod: PublicOutline[] = [];
     for (let outline of outlines) {
-      if (outline.kind == vscode.SymbolKind.Field) {
+      if (outline.element.kind == "FIELD") {
         if (!judgeRange) {
           outLines.push(outline);
         } else {
@@ -592,32 +588,22 @@ export class ClassGen {
             outLines.push(outline);
           }
         }
-      } else if (outline.kind == vscode.SymbolKind.Method) {
-        let type = DartSdk.getMethodType(document, outline);
-        if (type == "GETTER") {
-          getMethod.push(outline);
-        } else if (type == "SETTER") {
-          setMethod.push(outline);
-        }
-      } else if (outline.kind == vscode.SymbolKind.Class) {
+      } else if (outline.element.kind == "GETTER") {
+        getMethod.push(outline);
+      } else if (outline.element.kind == "SETTER") {
+        setMethod.push(outline);
+      } else if (
+        outline.element.kind == "CLASS" ||
+        outline.element.kind == "MIXIN"
+      ) {
         let range = outline.range;
         if (range.contains(selection)) {
-          let result = this.getChosenFields(
-            document,
-            outline.children,
-            selection,
-            true
-          );
+          let result = this.getChosenFields(outline, selection, true);
           if (result) {
             findFields.push(...result);
           }
         } else if (selection.contains(range)) {
-          let result = this.getChosenFields(
-            document,
-            outline.children,
-            selection,
-            false
-          );
+          let result = this.getChosenFields(outline, selection, false);
           if (result) {
             findFields.push(...result);
           }
@@ -629,6 +615,7 @@ export class ClassGen {
       ? undefined
       : [
           {
+            parent,
             fields: outLines,
             getMethod,
             setMethod,
@@ -639,7 +626,8 @@ export class ClassGen {
 }
 
 type FindField = {
-  readonly fields: vscode.DocumentSymbol[];
-  readonly getMethod: vscode.DocumentSymbol[];
-  readonly setMethod: vscode.DocumentSymbol[];
+  readonly parent: PublicOutline;
+  readonly fields: PublicOutline[];
+  readonly getMethod: PublicOutline[];
+  readonly setMethod: PublicOutline[];
 };
