@@ -282,9 +282,14 @@ export class FlutterProjectProvider
       placeHolder: "请输入文件名",
       prompt: "创建新文件",
       validateInput: value => {
-        if (!value) return "文件名不能为空";
-        if (value.includes("/") || value.includes("\\"))
+        if (!value) {
+          return "文件名不能为空";
+        }
+
+        if (value.includes("/") || value.includes("\\")) {
           return "文件名不能包含路径分隔符";
+        }
+
         let pathStr = find?.path ?? this.sdk.workspace.fsPath;
         if (fs.existsSync(path.join(pathStr, value))) {
           return "已存在同名文件";
@@ -293,7 +298,9 @@ export class FlutterProjectProvider
       },
     });
 
-    if (!fileName) return;
+    if (!fileName) {
+      return;
+    }
     this.createFile(fileName, find, false);
   }
 
@@ -313,9 +320,14 @@ export class FlutterProjectProvider
       placeHolder: "请输入文件夹名",
       prompt: "创建新文件夹",
       validateInput: value => {
-        if (!value) return "文件夹名不能为空";
-        if (value.includes("/") || value.includes("\\"))
+        if (!value) {
+          return "文件夹名不能为空";
+        }
+
+        if (value.includes("/") || value.includes("\\")) {
           return "文件夹名不能包含路径分隔符";
+        }
+
         let pathStr = find?.path ?? this.sdk.workspace.fsPath;
         if (fs.existsSync(path.join(pathStr, value))) {
           return "已存在同名文件夹";
@@ -324,7 +336,9 @@ export class FlutterProjectProvider
       },
     });
 
-    if (!fileName) return;
+    if (!fileName) {
+      return;
+    }
     this.createFile(fileName, find, true);
   }
 
@@ -388,9 +402,14 @@ export class FlutterProjectProvider
       value: uri.label,
       prompt: "重命名",
       validateInput: value => {
-        if (!value) return "名称不能为空";
-        if (value.includes("/") || value.includes("\\"))
+        if (!value) {
+          return "名称不能为空";
+        }
+
+        if (value.includes("/") || value.includes("\\")) {
           return "名称不能包含路径分隔符";
+        }
+
         let pathStr = find?.parent?.path ?? this.sdk.workspace.fsPath;
         if (fs.existsSync(path.join(pathStr, value))) {
           return uri.contextValue == cons.Folder_NODE_CONTEXT
@@ -401,7 +420,10 @@ export class FlutterProjectProvider
       },
     });
 
-    if (!fileName) return;
+    if (!fileName) {
+      return;
+    }
+
     let parentPath = uri.parent?.resourceUri ?? this.sdk.workspace;
     try {
       vscode.workspace.fs.rename(

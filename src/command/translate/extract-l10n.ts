@@ -244,12 +244,18 @@ export class ExtractL10n {
           ? "已存在相同的key，请手动输入多语言key"
           : undefined,
         validateInput: value => {
-          if (!value) return "key不能为空";
+          if (!value) {
+            return "key不能为空";
+          }
+
           if (tempJsonObj[value]) {
             return "已存在相同的key";
           }
-          if (!this.isValidkey(value))
+
+          if (!this.isValidkey(value)) {
             return "只能包含字母、数字和下划线，且不能已数字开头";
+          }
+
           return null;
         },
       });

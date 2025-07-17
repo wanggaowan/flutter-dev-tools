@@ -9,7 +9,7 @@ import {
   IS_FLUTTER_PROJECT,
   PROJECT_TREE_VIEW_ID,
 } from "./constants.contexts";
-import { disposeAll} from "./utils/utils";
+import { disposeAll } from "./utils/utils";
 import Logger from "./utils/logger";
 import { ImagePreviewProvider } from "./views/image-preview-provider";
 import { FlutterSdk } from "./sdk";
@@ -49,7 +49,9 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(COMMAND_EXPLORE_FILE_LOCATION, async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
+      if (!editor) {
+        return;
+      }
       // 关闭其它目录
       // await vscode.commands.executeCommand(
       //   "workbench.files.action.collapseExplorerFolders"

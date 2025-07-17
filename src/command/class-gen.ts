@@ -100,7 +100,9 @@ export class ClassGen {
     { editor: vscode.TextEditor; outline: PublicOutline } | undefined
   > {
     let editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) {
+      return;
+    }
 
     let sdk = getSdk()?.dartSdk;
     if (!sdk) {
@@ -152,7 +154,9 @@ export class ClassGen {
     vscode.TextEditor | undefined
   > {
     let value = await this.getClassOutline();
-    if (!value) return;
+    if (!value) {
+      return;
+    }
 
     let editor = value.editor;
     let classOutline = value.outline;
@@ -226,7 +230,9 @@ export class ClassGen {
     vscode.TextEditor | undefined
   > {
     let value = await this.getClassOutline();
-    if (!value) return;
+    if (!value) {
+      return;
+    }
 
     let editor = value.editor;
     let classOutline = value.outline;
@@ -538,7 +544,9 @@ export class ClassGen {
     { editor: vscode.TextEditor; outline: PublicOutline } | undefined
   > {
     let editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) {
+      return;
+    }
 
     let sdk = getSdk()?.dartSdk;
     if (!sdk) {

@@ -72,9 +72,14 @@ export class JsonToDart implements vscode.Disposable {
           "创建dart class" +
           (suffix.length == 0 ? "" : `(默认追加${suffix})后缀，可在设置中修改`),
         validateInput: value => {
-          if (!value) return "类名不能为空";
-          if (!isDartClassName(value))
+          if (!value) {
+            return "类名不能为空";
+          }
+
+          if (!isDartClassName(value)) {
             return "类名必须以大写字母开头，只能包含字母、数字和下划线，不能以下划线结尾且不能有连续的下划线";
+          }
+
           if (this.existSameClassName(symbols, value + suffix)) {
             return "当前文件已存在此类";
           }
@@ -140,7 +145,7 @@ export class JsonToDart implements vscode.Disposable {
       });
       if (succeed) {
         await editor.document.save();
-        await new Promise(resove=>setTimeout(resove,300));
+        await new Promise(resove => setTimeout(resove, 300));
       }
 
       if (genSerialization) {
