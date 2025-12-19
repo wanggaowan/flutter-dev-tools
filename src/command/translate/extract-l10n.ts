@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { disposeAll } from "../../utils/utils";
+import { disposeAll, unescapeDocumentText } from "../../utils/utils";
 import {
   COMMAND_EXTRACT_L10N,
   COMMAND_EXTRACT_L10N_AND_TRANSLATE,
@@ -68,6 +68,8 @@ export class ExtractL10n {
       return;
     }
 
+    // 从文档取出的文本是转义后的内容，因此需要反转义
+    matchText = unescapeDocumentText(matchText);
     if (matchText.trim().length == 0) {
       Logger.showNotification("文本为空，无需翻译");
       return;
@@ -145,7 +147,11 @@ export class ExtractL10n {
       if (match) {
         let text: string = match[0];
         placeholderList.push(text);
-        matchText = matchText.replace(text, `{param${index}}`);
+        if (useEscaping) {
+          matchText = matchText.replace(text, `<param${index}>`);
+        } else {
+          matchText = matchText.replace(text, `{param${index}}`);
+        }
         keyTranslateText = keyTranslateText.replace(text, "");
         index++;
       } else {
@@ -183,9 +189,14 @@ export class ExtractL10n {
       return;
     }
 
-    let tempLocale = tempJsonObj ? tempJsonObj["@@locale"] : undefined;
+    let tempLocale = tempJsonObj
+      ? tempJsonObj["@@locale_alias"] ?? tempJsonObj["@@locale"]
+      : undefined;
     if (!tempLocale) {
-      Logger.showNotification(`模板文件${resName}未配置@@locale属性`, "error");
+      Logger.showNotification(
+        `模板文件${resName}未配置@@locale属性或@@locale_alias属性`,
+        "error"
+      );
       return;
     }
 
@@ -393,12 +404,18 @@ export class ExtractL10n {
       }
 
       if (element.local == sourceLanguage) {
-        element.value = translateText;
+        element.value = TranslateUtils.fixTranslateError(
+          translateText,
+          useEscaping
+        );
         continue;
       }
 
       if (element.local == "en" && enTranslate && !isFormat) {
-        element.value = enTranslate;
+        element.value = TranslateUtils.fixTranslateError(
+          enTranslate,
+          useEscaping
+        );
         continue;
       }
 
@@ -415,8 +432,7 @@ export class ExtractL10n {
 
       element.value = TranslateUtils.fixTranslateError(
         element.value,
-        useEscaping,
-        placeholderList.length
+        useEscaping
       );
     }
 
@@ -503,7 +519,7 @@ class TranslateClass {
     if (!this.jsonObj) {
       return;
     }
-    this.local = this.jsonObj["@@locale"];
+    this.local = this.jsonObj["@@locale_alias"] ?? this.jsonObj["@@locale"];
   }
 
   get fileName(): string {

@@ -1,4 +1,6 @@
+import { unescape } from "querystring";
 import * as vscode from "vscode";
+import { TranslateUtils } from "./translate-utils";
 
 export function disposeAll(disposables: vscode.Disposable[]) {
   const toDispose = disposables.slice();
@@ -141,7 +143,7 @@ function inferTypeFromText(text: string): vscode.SymbolKind | undefined {
   return undefined;
 }
 
-export function isImage(name:string): boolean {
+export function isImage(name: string): boolean {
   let path = name.toLowerCase();
   return (
     path.endsWith("png") ||
@@ -173,4 +175,73 @@ export function openFile(uri: any) {
     return;
   }
   vscode.commands.executeCommand("vscode.open", url);
+}
+
+/**
+ * 反转义从vscode.TextDocument中取得的文本，从此文档取出的文本
+ * 是进过转义的，使用系统自带的unescape无法反转义
+ */
+export function unescapeDocumentText(str: string): string {
+  if (str.length < 2) {
+    return str;
+  }
+  let regex = RegExp(/(?<!\\)(?:\\\\)*\\'/g);
+  str = fixEscapeFormatError(regex, str);
+  regex = RegExp(/(?<!\\)(?:\\\\)*\\"/g);
+  str = fixEscapeFormatError(regex, str);
+  regex = RegExp(/(?<!\\)(?:\\\\)*\\n/g);
+  str = fixEscapeFormatError(regex, str, true);
+  str = str.replaceAll(RegExp(/\\\\/g), "\\");
+  return str;
+}
+
+function fixEscapeFormatError(
+  regex: RegExp,
+  text: string,
+  isLineBreaks = false
+): string {
+  if (text.length == 0) {
+    return text;
+  }
+
+  let matchResult = regex.exec(text);
+  if (!matchResult) {
+    return text;
+  }
+
+  var placeHolder = matchResult[0];
+  let oldLength = placeHolder.length;
+  let count = 0;
+  for (let i = 0; i < placeHolder.length; i++) {
+    if (placeHolder[i] === "\\") {
+      count++;
+    }
+  }
+
+  if (count % 2 != 0) {
+    if (isLineBreaks) {
+      if (count == 1) {
+        placeHolder = "\n";
+      }
+    } else {
+      placeHolder = placeHolder.substring(1, placeHolder.length);
+    }
+  }
+
+  regex.lastIndex =
+    matchResult.index! + oldLength + (placeHolder.length - oldLength);
+  return fixEscapeFormatError(
+    regex,
+    replaceRange(text, matchResult.index, oldLength, placeHolder),
+    isLineBreaks
+  );
+}
+
+function replaceRange(
+  str: string,
+  start: number,
+  length: number,
+  replacement: string
+): string {
+  return str.substring(0, start) + replacement + str.substring(start + length);
 }

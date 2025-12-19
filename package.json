@@ -3,7 +3,7 @@
   "displayName": "FlutterDevTools",
   "description": "flutter开发工具集",
   "publisher": "wanggaowan",
-  "version": "0.0.2",
+  "version": "1.0.2",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -105,7 +105,7 @@
       },
       {
         "command": "flutterDevTools.genGFile",
-        "title": "生成.g.dart文件"
+        "title": "全局生成.g.dart文件"
       },
       {
         "command": "flutterDevTools.genGFileSingle",
@@ -341,6 +341,11 @@
           "command": "flutterDevTools.genGFileSingle",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
           "group": "json2dart@2"
+        },
+        {
+          "command": "flutterDevTools.genGFile",
+          "when": "flutterDevTools.isFlutterProject",
+           "group": "json2dart@3"
         },
         {
           "command": "flutter.task.genl10n",

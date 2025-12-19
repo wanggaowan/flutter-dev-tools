@@ -116,7 +116,9 @@ export class TranslateArb {
       let content = fs.readFileSync(uri.path, "utf-8");
       if (!content || content.length == 0) {
         Logger.showNotification(
-          `${pathUtils.basename(uri.path)}未配置@@locale属性`,
+          `${pathUtils.basename(
+            uri.path
+          )}未配置@@locale属性或@@locale_alias属性`,
           "error"
         );
         return;
@@ -131,10 +133,11 @@ export class TranslateArb {
       return;
     }
 
-    let locale = needTranslateObj["@@locale"];
+    let locale =
+      needTranslateObj["@@locale_alias"] ?? needTranslateObj["@@locale"];
     if (!locale) {
       Logger.showNotification(
-        `${pathUtils.basename(uri.path)}未配置@@locale属性`,
+        `${pathUtils.basename(uri.path)}未配置@@locale属性或@@locale_alias属性`,
         "error"
       );
       return;
@@ -145,7 +148,7 @@ export class TranslateArb {
       let content = fs.readFileSync(uri.path, "utf-8");
       if (!content || content.length == 0) {
         Logger.showNotification(
-          `模板文件${resName}未配置@@locale属性`,
+          `模板文件${resName}未配置@@locale属性或@@locale_alias属性`,
           "error"
         );
         return;
@@ -156,9 +159,12 @@ export class TranslateArb {
       return;
     }
 
-    let tempLocale = tempJsonObj["@@locale"];
+    let tempLocale = tempJsonObj["@@locale_alias"] ?? tempJsonObj["@@locale"];
     if (!tempLocale) {
-      Logger.showNotification(`模板文件${resName}未配置@@locale属性`, "error");
+      Logger.showNotification(
+        `模板文件${resName}未配置@@locale属性或@@locale_alias属性`,
+        "error"
+      );
       return;
     }
 
@@ -197,9 +203,9 @@ export class TranslateArb {
     token: vscode.CancellationToken
   ) {
     let keys = Object.keys(tempJsonObj);
-    let needTranslateMap = new Map<string, string>();
+    let needTranslateMap = new Map<string, any>();
     for (let key of keys) {
-      if (key == "@@locale" || key.startsWith("@")) {
+      if (key == "@@locale") {
         continue;
       }
 
@@ -219,28 +225,37 @@ export class TranslateArb {
     let count = 1;
     let existTranslateFailed = false;
     for (const element of needTranslateMap.entries()) {
+      let key = element[0];
+      let value = element[1];
       progress.report({
-        message: `${count} / ${total} Translating: ${element[0]}`,
+        message: `${count} / ${total} Translating: ${key}`,
       });
 
-      let translateStr: string | undefined | null = element[1];
-      translateStr =
-        translateStr && translateStr.length > 0
-          ? await TranslateUtils.translate(tempLocale, locale, element[1])
-          : translateStr;
-
-      if (translateStr) {
-        let placeHolderCount = translateStr.indexOf("{Param") != -1 ? 5 : 0;
-        translateStr = TranslateUtils.fixTranslateError(
-          translateStr,
-          useEscaping,
-          placeHolderCount
+      if (typeof value !== "string") {
+        await this.writeTranslateResult(
+          needTranslateFileUri,
+          element[0],
+          value
         );
-        if (translateStr) {
+        count++;
+        if (token.isCancellationRequested) {
+          break;
+        }
+        return;
+      }
+
+      value =
+        value && value.length > 0
+          ? await TranslateUtils.translate(tempLocale, locale, value)
+          : value;
+
+      if (value) {
+        value = TranslateUtils.fixTranslateError(value, useEscaping, true);
+        if (value) {
           await this.writeTranslateResult(
             needTranslateFileUri,
             element[0],
-            translateStr
+            value
           );
         } else {
           existTranslateFailed = true;
@@ -255,14 +270,14 @@ export class TranslateArb {
     }
 
     if (existTranslateFailed) {
-      Logger.showNotification("部分内容未翻译或插入成功，请重试", "warn");
+      Logger.showNotification("存在部分内容未翻译或插入成功，请重试", "warn");
     }
   }
 
   private static async writeTranslateResult(
     uri: vscode.Uri,
     key: string,
-    translate: string
+    translate: any
   ) {
     let path = uri.fsPath ?? uri.path;
     var content = fs.readFileSync(path, "utf-8");

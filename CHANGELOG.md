@@ -1,9 +1,14 @@
 # Change Log
 
-All notable changes to the "flutter-dev-tools" extension will be documented in this file.
+## [1.0.2] - 2025-12-19
+1. 优化提取多语言逻辑，全面适配arb文件开启转义功能(use-escaping: true)的格式处理
+2. 根据模板翻译时，忽略key以@@开头的字段,支持key以@开头的描述文本拷贝
+3. 解决翻译后各转义符格式错误问题
+4. 文件编辑器上下文菜单Flutter分组中加入全局生成.g.dart文件命令
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [1.0.1] - 2025-11-05
+翻译arb文件时，支持通过@@locale_alias设置语言别名
 
-## [Unreleased]
+## [1.0.0] - 2025-07-17
+提供Flutter开发常用功能，具体查看[README.md](./README.md)
 
-- Initial release
