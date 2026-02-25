@@ -3,7 +3,7 @@
   "displayName": "FlutterDevTools",
   "description": "flutter开发工具集",
   "publisher": "wanggaowan",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -345,7 +345,7 @@
         {
           "command": "flutterDevTools.genGFile",
           "when": "flutterDevTools.isFlutterProject",
-           "group": "json2dart@3"
+          "group": "json2dart@3"
         },
         {
           "command": "flutter.task.genl10n",
@@ -458,6 +458,18 @@
       {
         "title": "翻译",
         "properties": {
+          "flutterDevTools.aliAk": {
+            "type": "string",
+            "default": "",
+            "description": "阿里翻译AK",
+            "scope": "window"
+          },
+          "flutterDevTools.aliSk": {
+            "type": "string",
+            "default": "",
+            "description": "阿里翻译SK",
+            "scope": "window"
+          },
           "flutterDevTools.showRenameDialog": {
             "type": "boolean",
             "default": true,

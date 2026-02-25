@@ -1,11 +1,13 @@
 import alimt20181012, * as $alimt20181012 from "@alicloud/alimt20181012";
 import OpenApi, * as $OpenApi from "@alicloud/openapi-client";
+import { ConfigUtils } from "./config-utils";
+import Logger from "./logger";
 
 export class TranslateUtils {
   private static client: alimt20181012 | undefined;
   private static async createClient(
     accessKeyId: string,
-    accessKeySecret: string
+    accessKeySecret: string,
   ): Promise<alimt20181012> {
     let config = new $OpenApi.Config({
       accessKeyId: accessKeyId,
@@ -18,13 +20,22 @@ export class TranslateUtils {
   static async translate(
     sourceLanguage: string,
     targetLanguage: string,
-    text: string
+    text: string,
   ) {
+    let ak = ConfigUtils.aliAk;
+    if(!ak) {
+      Logger.showNotification("未配置阿里云翻译AccessKeyId","warn");
+      return null;
+    }
+
+    let sk = ConfigUtils.aliSk;
+    if(!sk) {
+      Logger.showNotification("未配置阿里云翻译secretKey","warn");
+      return null;
+    }
+
     if (!TranslateUtils.client) {
-      TranslateUtils.client = await TranslateUtils.createClient(
-        this.mapValue("TFRBSTV0UnFrbzY3QThVeFZDOGt4dHNu"),
-        this.mapValue("V3FWRGI3c210UW9rOGJUOXF2VHhENnYzbmF1bjU1")
-      );
+      TranslateUtils.client = await TranslateUtils.createClient(ak, sk);
     }
 
     let request = new $alimt20181012.TranslateGeneralRequest({
@@ -41,10 +52,6 @@ export class TranslateUtils {
     return response.body.data?.translated;
   }
 
-  private static mapValue(value: String): string {
-    return Buffer.from(value, "base64").toString();
-  }
-
   /**
    * 修复翻译后格式错误，如占位符为大写，\n，%s翻译后被分开成 \ n,% s等错误
    *
@@ -54,12 +61,12 @@ export class TranslateUtils {
   static fixTranslateError(
     translate: string | null | undefined,
     useEscaping?: boolean,
-    isByTemplate: Boolean = false
+    isByTemplate: Boolean = false,
   ): string | null {
     var translateStr = this.fixTranslatePlaceHolderStr(
       translate,
       useEscaping,
-      isByTemplate
+      isByTemplate,
     );
     translateStr = this.fixNewLineFormatError(translateStr);
     if (translateStr) {
@@ -79,7 +86,7 @@ export class TranslateUtils {
   private static fixTranslatePlaceHolderStr(
     translate: string | null | undefined,
     useEscaping: Boolean = false,
-    isByTemplate: Boolean = false
+    isByTemplate: Boolean = false,
   ): string | null {
     if (!translate || translate.length == 0) {
       return null;
@@ -89,7 +96,7 @@ export class TranslateUtils {
     if (isByTemplate) {
       if (useEscaping) {
         regex = RegExp(
-          /((['\x20]+\x20*\{\x20*[Pp]aram[0-9]*\x20*\}\x20*['\x20]+)|(\{\x20*[Pp]aram[0-9]*\x20*\}))/g
+          /((['\x20]+\x20*\{\x20*[Pp]aram[0-9]*\x20*\}\x20*['\x20]+)|(\{\x20*[Pp]aram[0-9]*\x20*\}))/g,
         );
       } else {
         regex = RegExp(/\{\x20*[Pp]aram[0-9]*\x20*\}/g);
@@ -104,7 +111,7 @@ export class TranslateUtils {
       regex,
       translate,
       useEscaping,
-      isByTemplate
+      isByTemplate,
     );
 
     if (useEscaping) {
@@ -125,7 +132,7 @@ export class TranslateUtils {
                 translate,
                 matchResult.index!,
                 oldLength,
-                placeHolder
+                placeHolder,
               );
             }
             regex.lastIndex = matchResult.index! + placeHolder.length;
@@ -140,7 +147,7 @@ export class TranslateUtils {
         translate = translate.replaceAll("}", "'}'");
         translate = this.replacePlaceHolder(
           RegExp(/<param[0-9]*>/g),
-          translate
+          translate,
         );
       }
     }
@@ -151,7 +158,7 @@ export class TranslateUtils {
   // 在{，}前后插入空格
   private static inseartWhiteSpace(
     translate: string,
-    useEscaping: Boolean = false
+    useEscaping: Boolean = false,
   ): string {
     if (!useEscaping || translate.length == 0) {
       return translate;
@@ -174,7 +181,7 @@ export class TranslateUtils {
                 translate,
                 matchResult.index!,
                 placeHolder.length - 1,
-                placeHolder
+                placeHolder,
               );
             }
           }
@@ -199,7 +206,7 @@ export class TranslateUtils {
                 translate,
                 matchResult.index!,
                 placeHolder.length - 1,
-                placeHolder
+                placeHolder,
               );
             }
           }
@@ -232,7 +239,7 @@ export class TranslateUtils {
     regex: RegExp,
     text: string,
     useEscaping: Boolean = false,
-    isByTemplate: Boolean = false
+    isByTemplate: Boolean = false,
   ): string {
     if (text.length == 0) {
       return text;
@@ -295,7 +302,7 @@ export class TranslateUtils {
     placeHolder = placeHolder.replaceAll("<", "{").replaceAll(">", "}");
     return this.replacePlaceHolder(
       regex,
-      this.replaceRange(text, matchResult.index, oldLength, placeHolder)
+      this.replaceRange(text, matchResult.index, oldLength, placeHolder),
     );
   }
 
@@ -340,7 +347,6 @@ export class TranslateUtils {
     } else if (count % 2 != 0) {
       // 移除转义字符时，只有之前存在奇数个时才处理
       placeHolder = placeHolder.substring(1, placeHolder.length);
-
     }
 
     regex.lastIndex =
@@ -348,7 +354,7 @@ export class TranslateUtils {
     return this.fixEscapeFormatError(
       regex,
       this.replaceRange(text, matchResult.index, oldLength, placeHolder),
-      isAdd
+      isAdd,
     );
   }
 
@@ -356,7 +362,7 @@ export class TranslateUtils {
     str: string,
     start: number,
     length: number,
-    replacement: string
+    replacement: string,
   ): string {
     return (
       str.substring(0, start) + replacement + str.substring(start + length)

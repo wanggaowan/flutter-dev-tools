@@ -274,7 +274,6 @@ export class ClassGen {
 
     let succeed = false;
     if (content.length > 0) {
-      let indexOf = editor.document.getText(classOutline.range).indexOf("{");
       let end = classOutline.range.end;
       let pos = new vscode.Position(end.line, end.character - 1);
       succeed = await editor.edit(edit => {

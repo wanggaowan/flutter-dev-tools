@@ -73,4 +73,18 @@ export class ConfigUtils {
     return vscode.workspace.getConfiguration("flutterDevTools")
       .showRenameDialog;
   }
+
+  /**
+   * 阿里云翻译api ak
+   */
+  static get aliAk(): string | undefined | null {
+    return vscode.workspace.getConfiguration("flutterDevTools").aliAk;
+  }
+
+  /**
+   * 阿里云翻译api sk
+   */
+  static get aliSk(): string | undefined | null {
+    return vscode.workspace.getConfiguration("flutterDevTools").aliSk;
+  }
 }
