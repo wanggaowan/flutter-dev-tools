@@ -22,9 +22,9 @@ export const strRegex = new RegExp(/"((\\")|[^"])*"|'((\\')|[^'])*'/g);
 // 以下正则则匹配$前无反斜杠
 export const strRefRegex = new RegExp(/((?<!\\)\$[A-Za-z_][A-Za-z_0-9]*|(?<!\\)\${.*?})/g);
 
-// 匹配 S.current.xxx 或 S.of(xxx).xxx 格式字符串
+// 匹配 S.current.xxx 或 S.of(xxx).xxx 格式字符串，支持带参数调用如 S.current.xxx(arg1, arg2)
 export const strCallRegex = new RegExp(
-  /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*/g
+  /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*(\([^)]*\))?/g
 );
 
 // 匹配图片资源的引用，如Images.xxx，点号前后允许空格和换行

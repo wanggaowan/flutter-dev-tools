@@ -75,6 +75,15 @@ export class ConfigUtils {
   }
 
   /**
+   * 是否在代码中展示多语言真实文本
+   */
+  static get showL10nText(): boolean {
+    return (
+      vscode.workspace.getConfiguration("flutterDevTools").showL10nText ?? true
+    );
+  }
+
+  /**
    * 阿里云翻译api ak
    */
   static get aliAk(): string | undefined | null {

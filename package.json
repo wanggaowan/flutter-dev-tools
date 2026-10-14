@@ -475,6 +475,12 @@
             "default": true,
             "description": "提取多语言时，是否展示重命名弹窗",
             "scope": "window"
+          },
+          "flutterDevTools.showL10nText": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否在代码中展示多语言真实文本",
+            "scope": "window"
           }
         }
       }
