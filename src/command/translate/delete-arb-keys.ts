@@ -2,10 +2,12 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { disposeAll } from "../../utils/utils";
+import {
+  extractSelectedTopLevelKeys,
+  listArbFilesInDir,
+} from "../../utils/arb-utils";
 import { COMMAND_DELETE_ARB_KEYS } from "../../constants.contexts";
 import Logger from "../../utils/logger";
-
-const KEY_LINE_REGEX = /^(\s*)"((?:@)?[^"]+)"\s*:/;
 
 /**
  * 在同目录所有 arb 文件中按 key 精确删除选中条目
@@ -43,17 +45,13 @@ export class DeleteArbKeys {
       return;
     }
 
-    const selectedKeys = DeleteArbKeys.extractKeysFromSelection(editor);
+    const selectedKeys = extractSelectedTopLevelKeys(editor);
     if (selectedKeys.length === 0) {
       Logger.showNotification("未识别到选中的顶层 key", "warn");
       return;
     }
 
-    const dirPath = pathUtils.dirname(doc.fileName);
-    const arbFiles = fs
-      .readdirSync(dirPath)
-      .filter(f => f.toLowerCase().endsWith(".arb"))
-      .map(f => pathUtils.join(dirPath, f));
+    const arbFiles = listArbFilesInDir(doc.fileName);
 
     const dirtyOther = vscode.workspace.textDocuments.find(
       d => arbFiles.includes(d.fileName) && d.isDirty
@@ -121,87 +119,6 @@ export class DeleteArbKeys {
         ", "
       )}`
     );
-  }
-
-  /**
-   * 解析编辑器中选中的顶层 key；未选中时以光标所在顶层项为准。
-   */
-  static extractKeysFromSelection(editor: vscode.TextEditor): string[] {
-    const doc = editor.document;
-    const selection = editor.selection;
-
-    const topIndent = DeleteArbKeys.findTopLevelIndent(doc);
-    if (topIndent === undefined) {
-      return [];
-    }
-
-    let startLine: number;
-    let endLine: number;
-    if (selection.isEmpty) {
-      const owner = DeleteArbKeys.findOwningTopLevelLine(
-        doc,
-        selection.active.line,
-        topIndent
-      );
-      if (owner < 0) {
-        return [];
-      }
-      startLine = owner;
-      endLine = owner;
-    } else {
-      startLine = selection.start.line;
-      endLine = selection.end.line;
-    }
-
-    const keys: string[] = [];
-    const seen = new Set<string>();
-    for (let i = startLine; i <= endLine; i++) {
-      const lineText = doc.lineAt(i).text;
-      const match = KEY_LINE_REGEX.exec(lineText);
-      if (!match) {
-        continue;
-      }
-      if (match[1].length !== topIndent) {
-        continue;
-      }
-      const key = match[2];
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      keys.push(key);
-    }
-    return keys;
-  }
-
-  /**
-   * 返回首个顶层 key 行的缩进长度，用于区分顶层与嵌套。
-   */
-  private static findTopLevelIndent(doc: vscode.TextDocument): number | undefined {
-    for (let i = 0; i < doc.lineCount; i++) {
-      const match = KEY_LINE_REGEX.exec(doc.lineAt(i).text);
-      if (match) {
-        return match[1].length;
-      }
-    }
-    return undefined;
-  }
-
-  /**
-   * 从光标行向上查找所属顶层 key 行；找不到返回 -1。
-   */
-  private static findOwningTopLevelLine(
-    doc: vscode.TextDocument,
-    cursorLine: number,
-    topIndent: number
-  ): number {
-    for (let i = cursorLine; i >= 0; i--) {
-      const match = KEY_LINE_REGEX.exec(doc.lineAt(i).text);
-      if (match && match[1].length === topIndent) {
-        return i;
-      }
-    }
-    return -1;
   }
 
   /**

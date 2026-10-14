@@ -130,6 +130,10 @@
       {
         "command": "flutterDevTools.deleteArbKeys",
         "title": "在所有arb文件中删除此项"
+      },
+      {
+        "command": "flutterDevTools.translateSelectionToArb",
+        "title": "翻译此项到其它arb文件"
       }
     ],
     "submenus": [
@@ -218,6 +222,10 @@
         },
         {
           "command": "flutterDevTools.deleteArbKeys",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.translateSelectionToArb",
           "when": "false"
         }
       ],
@@ -319,6 +327,11 @@
           "command": "flutterDevTools.deleteArbKeys",
           "when": "resourceExtname == .arb",
           "group": "a@2"
+        },
+        {
+          "command": "flutterDevTools.translateSelectionToArb",
+          "when": "resourceExtname == .arb",
+          "group": "a@3"
         },
         {
           "command": "flutterDevTools.genConstructor",
