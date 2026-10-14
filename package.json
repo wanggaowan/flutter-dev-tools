@@ -126,6 +126,10 @@
       {
         "command": "flutterDevTools.extractL10nAndTranslate",
         "title": "提取多语言并翻译"
+      },
+      {
+        "command": "flutterDevTools.deleteArbKeys",
+        "title": "在所有arb文件中删除此项"
       }
     ],
     "submenus": [
@@ -210,6 +214,10 @@
         },
         {
           "command": "flutterDevTools.extractL10nAndTranslate",
+          "when": "false"
+        },
+        {
+          "command": "flutterDevTools.deleteArbKeys",
           "when": "false"
         }
       ],
@@ -306,6 +314,11 @@
           "command": "flutterDevTools.extractL10nAndTranslate",
           "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
           "group": "a@1"
+        },
+        {
+          "command": "flutterDevTools.deleteArbKeys",
+          "when": "resourceExtname == .arb",
+          "group": "a@2"
         },
         {
           "command": "flutterDevTools.genConstructor",
