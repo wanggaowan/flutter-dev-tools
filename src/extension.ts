@@ -27,8 +27,10 @@ import { DeleteArbKeys } from "./command/translate/delete-arb-keys";
 import { TranslateSelectionToArb } from "./command/translate/translate-selection-to-arb";
 import { RouterDefinitionProvider } from "./provider/router-definition-provider";
 import { ImportAndroidImages } from "./command/import-android-images";
+import { ImageAssetWatcher } from "./watcher/image-asset-watcher";
 
 let _sdk: FlutterSdk | undefined;
+let _imageAssetWatcher: ImageAssetWatcher | undefined;
 
 export function getSdk(): FlutterSdk | undefined {
   return _sdk;
@@ -133,10 +135,25 @@ export async function activate(
 
   disposable = new ImportAndroidImages(_sdk);
   context.subscriptions.push(disposable);
+
+  // 启动图片资源目录监听器
+  _imageAssetWatcher = new ImageAssetWatcher(rootPath.fsPath);
+  context.subscriptions.push(_imageAssetWatcher);
+
+  // 监听配置变更，重新初始化监听器
+  const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async e => {
+    if (e.affectsConfiguration("flutterDevTools.imageSrcPath")) {
+      Logger.d("检测到 imageSrcPath 配置变更，重新初始化监听器");
+      await _imageAssetWatcher?.reinitialize();
+    }
+  });
+  context.subscriptions.push(configChangeDisposable);
 }
 
 export async function deactivate(isRestart = false) {
   Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
+  _imageAssetWatcher?.dispose();
+  _imageAssetWatcher = undefined;
   _sdk?.deactivate();
   _sdk = undefined;
   setContext(IS_FLUTTER_PROJECT, false);

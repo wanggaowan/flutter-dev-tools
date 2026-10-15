@@ -7,6 +7,7 @@ import { disposeAll, isImage } from "../utils/utils";
 import { ConfigUtils } from "../utils/config-utils";
 import Logger from "../utils/logger";
 import { FlutterSdk } from "../sdk";
+import { ImageReferenceGenerator } from "../utils/image-reference-generator";
 
 /**
  * Android 密度目录到 Flutter 变体目录的映射
@@ -208,8 +209,6 @@ export class ImportAndroidImages implements vscode.Disposable {
           `成功从外部导入 ${importedCount} 个图片文件到 "${relativePath}"`,
           "info",
         );
-        // 刷新项目视图
-        vscode.commands.executeCommand("flutterProjectView.refresh");
       } else {
         if (totlaCount == 0) {
           Logger.showNotification("未找到可导入的图片", "warn");

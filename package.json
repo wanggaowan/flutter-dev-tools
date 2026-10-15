@@ -3,7 +3,7 @@
   "displayName": "FlutterDevTools",
   "description": "flutter开发工具集",
   "publisher": "wanggaowan",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "engines": {
     "vscode": "^1.99.0"
   },
