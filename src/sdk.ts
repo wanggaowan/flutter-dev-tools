@@ -1,6 +1,4 @@
 import * as vscode from "vscode";
-import { setContext } from "./utils/build-in-command-utils";
-import { EXIST_VSCODEFLUTTERTOOL } from "./constants.contexts";
 import { importRegex, partRegex } from "./utils/regexp-utils";
 
 export class FlutterSdk {
@@ -15,17 +13,10 @@ export class FlutterSdk {
     if (dartExt) {
       this.dartSdk = new DartSdk(dartExt);
     }
-
-    let exist = vscode.extensions.getExtension(
-      "undefined_publisher.vscodefluttertool"
-    );
-    if (exist) {
-      setContext(EXIST_VSCODEFLUTTERTOOL, true);
-    }
   }
 
   deactivate() {
-    setContext(EXIST_VSCODEFLUTTERTOOL, false);
+    
   }
 }
 

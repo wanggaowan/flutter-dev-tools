@@ -24,6 +24,13 @@ export class ConfigUtils {
   }
 
   /**
+   * 获取生成图片引用类文件类名称
+   */
+  static get imagesClassName(): string | undefined {
+    return vscode.workspace.getConfiguration("flutterDevTools").imagesClassName;
+  }
+
+  /**
    * json转dart时，新生成的类后缀
    */
   static get classSuffix(): string {

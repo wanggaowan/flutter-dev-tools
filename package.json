@@ -134,11 +134,19 @@
       {
         "command": "flutterDevTools.translateSelectionToArb",
         "title": "翻译此项到其它arb文件"
+      },
+      {
+        "command": "flutterDevTools.importAndroidImages",
+        "title": "导入 Android 图片资源"
       }
     ],
     "submenus": [
       {
         "id": "flutterDevTools.editorContext",
+        "label": "Flutter"
+      },
+      {
+        "id": "flutterDevTools.explorerContext",
         "label": "Flutter"
       }
     ],
@@ -227,13 +235,49 @@
         {
           "command": "flutterDevTools.translateSelectionToArb",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.importAndroidImages",
+          "when": "false"
         }
       ],
       "explorer/context": [
         {
+          "submenu": "flutterDevTools.explorerContext",
+          "when": "flutterDevTools.isFlutterProject",
+          "group": "navigation"
+        }
+      ],
+      "flutterDevTools.explorerContext": [
+        {
           "command": "flutterDevTools.translateArb",
-          "when": "flutterDevTools.isFlutterProject && resourceExtname == .arb",
+          "when": "resourceExtname == .arb",
+          "group": "a"
+        },
+        {
+          "command": "flutterDevTools.importAndroidImages",
+          "when": "explorerResourceIsFolder",
+          "group": "a@1"
+        },
+        {
+          "command": "flutter.task.genl10n",
+          "when": "dart-code:anyProjectLoaded",
           "group": "z_commands"
+        },
+        {
+          "command": "pub.get",
+          "when": "dart-code:anyProjectLoaded",
+          "group": "z_commands@1"
+        },
+        {
+          "command": "pub.get.all",
+          "when": "dart-code:anyProjectLoaded",
+          "group": "z_commands@2"
+        },
+        {
+          "command": "flutterDevTools.showDeps",
+          "when": "dart-code:anyProjectLoaded",
+          "group": "z_commands@3"
         }
       ],
       "view/title": [
@@ -265,11 +309,6 @@
       ],
       "view/item/context": [
         {
-          "command": "vscodefluttertool.creatMVCFile",
-          "when": "view == flutterProjectView && flutterDevTools.exist.vscodefluttertool",
-          "group": "z_commands"
-        },
-        {
           "command": "flutterProjectView.addFile",
           "when": "view == flutterProjectView",
           "group": "z_commands@1"
@@ -290,19 +329,14 @@
           "group": "z_commands@4"
         },
         {
-          "command": "flutterDevTools.translateArb",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.arbFile",
+          "command": "flutterDevTools.importAndroidImages",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
           "group": "z_commands@5"
         },
         {
-          "command": "vscodefluttertool.importPic",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder && flutterDevTools.exist.vscodefluttertool",
+          "command": "flutterDevTools.translateArb",
+          "when": "view == flutterProjectView && viewItem == flutterDevTools.arbFile",
           "group": "z_commands@6"
-        },
-        {
-          "command": "vscodefluttertool.deleteImg",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.imageFile && flutterDevTools.exist.vscodefluttertool",
-          "group": "z_commands@7"
         }
       ],
       "editor/context": [
@@ -315,12 +349,12 @@
       "flutterDevTools.editorContext": [
         {
           "command": "flutterDevTools.extractL10n",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "a"
         },
         {
           "command": "flutterDevTools.extractL10nAndTranslate",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "a@1"
         },
         {
@@ -335,37 +369,37 @@
         },
         {
           "command": "flutterDevTools.genConstructor",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "gen"
         },
         {
           "command": "flutterDevTools.getter",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "gen@1"
         },
         {
           "command": "flutterDevTools.setter",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "gen@2"
         },
         {
           "command": "flutterDevTools.getterAndSetter",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "gen@3"
         },
         {
           "command": "flutterDevTools.json2dart",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "json2dart"
         },
         {
           "command": "flutterDevTools.genSerialization",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "json2dart@1"
         },
         {
           "command": "flutterDevTools.genGFileSingle",
-          "when": "resourceLangId == dart && flutterDevTools.isFlutterProject",
+          "when": "resourceLangId == dart",
           "group": "json2dart@2"
         },
         {
@@ -375,22 +409,22 @@
         },
         {
           "command": "flutter.task.genl10n",
-          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "when": "dart-code:anyProjectLoaded",
           "group": "z_commands"
         },
         {
           "command": "pub.get",
-          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "when": "dart-code:anyProjectLoaded",
           "group": "z_commands@1"
         },
         {
           "command": "pub.get.all",
-          "when": "flutterDevTools.isFlutterProject && dart-code:anyProjectLoaded",
+          "when": "dart-code:anyProjectLoaded",
           "group": "z_commands@2"
         },
         {
           "command": "flutterDevTools.showDeps",
-          "when": "flutterDevTools.isFlutterProject",
+          "when": "dart-code:anyProjectLoaded",
           "group": "z_commands@3"
         }
       ]
@@ -437,6 +471,12 @@
             "type": "string",
             "default": "lib/resources/images.dart",
             "description": "生成图片引用类文件所在路径。此目录为基于当前项目根目录的相对目录",
+            "scope": "window"
+          },
+          "flutterDevTools.imagesClassName": {
+            "type": "string",
+            "default": "Images",
+            "description": "生成图片引用类文件中class的名称，只要图片引用都是基于此类名称",
             "scope": "window"
           }
         }
@@ -528,6 +568,7 @@
   },
   "dependencies": {
     "@alicloud/alimt20181012": "^1.0.4",
+    "adm-zip": "^0.6.1",
     "vscode-uri": "^3.1.0",
     "yaml": "^2.7.0"
   },

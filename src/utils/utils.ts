@@ -1,6 +1,4 @@
-import { unescape } from "querystring";
 import * as vscode from "vscode";
-import { TranslateUtils } from "./translate-utils";
 
 export function disposeAll(disposables: vscode.Disposable[]) {
   const toDispose = disposables.slice();
