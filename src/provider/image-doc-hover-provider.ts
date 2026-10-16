@@ -48,9 +48,11 @@ export class ImageDocHoverProvider
       return null;
     }
 
-    imagesFilePath = pathUtils.join(this.sdk.workspace.fsPath, imagesFilePath);
+    let workspaceFsPtah = this.sdk.workspace.fsPath;
+    let documentFsPath = document.uri.fsPath;
+    imagesFilePath = pathUtils.join(workspaceFsPtah, imagesFilePath);
     let imageRelPath: string[] = [];
-    if (imagesFilePath == document.uri.fsPath) {
+    if (imagesFilePath == documentFsPath) {
       let textLine = document.lineAt(position);
       let text = document.getText(textLine.range);
       let matchAll = text.matchAll(strRegex);
@@ -164,15 +166,18 @@ export class ImageDocHoverProvider
         }
       }
 
-      let pathStr = pathUtils.join(this.sdk.workspace.path, relPath);
-      let openPath = pathUtils.join(this.sdk.workspace.path, element);
+      let imagePath = pathUtils.join(workspaceFsPtah, relPath);
+      let openPath = pathUtils.join(workspaceFsPtah, element);
       if (!fs.existsSync(openPath)) {
-        openPath = pathStr;
+        openPath = imagePath;
       }
 
+      // hover 里的相对路径会以文档所在目录为基准解析，且无法处理路径中的空格与 windows 反斜杠，
+      // 统一用 file:// URI（isTrusted 为 true 且资源在工作区内可正常渲染）
       let markdown = new vscode.MarkdownString(
-        `[${element}](${openPath})\n\n![](${pathStr})\n`
+        `[${element}](${vscode.Uri.file(openPath).toString()})\n\n![](${vscode.Uri.file(imagePath).toString()})\n`
       );
+      markdown.baseUri = document.uri;
       markdown.isTrusted = true;
       doc.push(markdown);
     }
