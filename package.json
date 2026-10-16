@@ -51,35 +51,6 @@
         "icon": "media/location.svg"
       },
       {
-        "command": "flutterProjectView.location",
-        "title": "File Location",
-        "icon": "media/location.svg"
-      },
-      {
-        "command": "flutterProjectView.addFile",
-        "title": "新建文件",
-        "icon": "$(file-add)"
-      },
-      {
-        "command": "flutterProjectView.addFolder",
-        "title": "新建文件夹",
-        "icon": "$(file-directory-create)"
-      },
-      {
-        "command": "flutterProjectView.rename",
-        "title": "重命名"
-      },
-      {
-        "command": "flutterProjectView.delete",
-        "title": "删除",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "flutterProjectView.refresh",
-        "title": "刷新",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "flutterDevTools.json2dart",
         "title": "json to dart"
       },
@@ -154,30 +125,6 @@
       "commandPalette": [
         {
           "command": "flutterDevTools.file.location",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.location",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.addFile",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.addFolder",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.refresh",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.delete",
-          "when": "false"
-        },
-        {
-          "command": "flutterProjectView.rename",
           "when": "false"
         },
         {
@@ -285,58 +232,6 @@
           "command": "flutterDevTools.file.location",
           "when": "view == workbench.explorer.fileView",
           "group": "navigation"
-        },
-        {
-          "command": "flutterProjectView.location",
-          "when": "view == flutterProjectView",
-          "group": "navigation"
-        },
-        {
-          "command": "flutterProjectView.addFile",
-          "when": "view == flutterProjectView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "flutterProjectView.addFolder",
-          "when": "view == flutterProjectView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "flutterProjectView.refresh",
-          "when": "view == flutterProjectView",
-          "group": "navigation@3"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "flutterProjectView.addFile",
-          "when": "view == flutterProjectView",
-          "group": "z_commands@1"
-        },
-        {
-          "command": "flutterProjectView.addFolder",
-          "when": "view == flutterProjectView",
-          "group": "z_commands@2"
-        },
-        {
-          "command": "flutterProjectView.rename",
-          "when": "view == flutterProjectView",
-          "group": "z_commands@3"
-        },
-        {
-          "command": "flutterProjectView.delete",
-          "when": "view == flutterProjectView",
-          "group": "z_commands@4"
-        },
-        {
-          "command": "flutterDevTools.importAndroidImages",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.isFolder",
-          "group": "z_commands@5"
-        },
-        {
-          "command": "flutterDevTools.translateArb",
-          "when": "view == flutterProjectView && viewItem == flutterDevTools.arbFile",
-          "group": "z_commands@6"
         }
       ],
       "editor/context": [
@@ -430,14 +325,6 @@
       ]
     },
     "views": {
-      "explorer": [
-        {
-          "id": "flutterProjectView",
-          "name": "Flutter",
-          "icon": "media/flutter.svg",
-          "when": "flutterDevTools.isFlutterProject"
-        }
-      ],
       "resource-manger": [
         {
           "id": "imagePreviewView",

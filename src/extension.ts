@@ -2,12 +2,10 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import * as fs from "fs";
-import { FlutterProjectProvider } from "./provider/project-tree-data-provider";
 import {
   COMMAND_EXPLORE_FILE_LOCATION,
   IMAGE_PREVIEW_VIEW_ID,
   IS_FLUTTER_PROJECT,
-  PROJECT_TREE_VIEW_ID,
 } from "./constants.contexts";
 import { disposeAll } from "./utils/utils";
 import Logger from "./utils/logger";
@@ -93,7 +91,6 @@ export async function activate(
   }
   _sdk = new FlutterSdk(context, rootPath, example);
   setContext(IS_FLUTTER_PROJECT, true);
-  registerFlutterPorjectView(_sdk);
   registerImagePreviewView(_sdk);
 
   // 注册命令
@@ -157,16 +154,6 @@ export async function deactivate(isRestart = false) {
   _sdk?.deactivate();
   _sdk = undefined;
   setContext(IS_FLUTTER_PROJECT, false);
-}
-
-// 注册flutter专属项目视图
-function registerFlutterPorjectView(sdk: FlutterSdk) {
-  let provider = new FlutterProjectProvider(sdk);
-  let treeView = vscode.window.createTreeView(PROJECT_TREE_VIEW_ID, {
-    treeDataProvider: provider,
-  });
-  provider.bindTreeView(treeView);
-  sdk.context.subscriptions.push(treeView);
 }
 
 // 注册图片预览视图
