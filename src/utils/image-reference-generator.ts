@@ -184,7 +184,7 @@ export class ImageReferenceGenerator {
     directoryPath: string,
   ): string[] {
     // key: 不带扩展名和变体的路径, value: 完整相对路径
-    const images: Map<string, string> = new Map(); 
+    const images: Map<string, string> = new Map();
 
     if (!fs.existsSync(directoryPath)) {
       return [];
@@ -303,10 +303,8 @@ export class ImageReferenceGenerator {
       await this.writeImagesClassContent(workspaceRoot, updatedContent);
 
       Logger.d(`已为 ${addedCount} 个图片生成引用方法`);
-      Logger.showNotification(`已为 ${addedCount} 个图片生成引用方法`, "info");
     } catch (e) {
       Logger.e("生成图片引用失败", e);
-      Logger.showNotification("生成图片引用失败", "error");
     }
   }
 
@@ -384,10 +382,7 @@ export class ImageReferenceGenerator {
       if (!methodName) {
         if (pruned.removed.length > 0) {
           await this.writeImagesClassContent(workspaceRoot, pruned.content);
-          Logger.showNotification(
-            `已剔除 ${pruned.removed.length} 个失效的图片引用`,
-            "info",
-          );
+          Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
         }
         return;
       }
@@ -402,10 +397,7 @@ export class ImageReferenceGenerator {
         await this.writeImagesClassContent(workspaceRoot, newContent);
         Logger.d(`已移除图片引用: ${methodName}`);
         if (pruned.removed.length > 0) {
-          Logger.showNotification(
-            `已剔除 ${pruned.removed.length} 个失效的图片引用`,
-            "info",
-          );
+          Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
         }
       }
     } catch (e) {
@@ -444,7 +436,8 @@ export class ImageReferenceGenerator {
       let content = this.readImagesClassContent(workspaceRoot);
 
       // 保留类定义结构，移除所有 getter 方法
-      const regex = /\s*static\s+String\s+get\s+\w+\s*=>\s*('([^']*)'|"([^"]*)")\s*;\n?/g;
+      const regex =
+        /\s*static\s+String\s+get\s+\w+\s*=>\s*('([^']*)'|"([^"]*)")\s*;\n?/g;
       let cleanedContent = content.replace(regex, "");
 
       // 找出类定义的结束位置

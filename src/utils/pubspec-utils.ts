@@ -281,7 +281,7 @@ export class PubspecUtils {
 
       const assets = this.getAssets(pubspec);
       const relativePath = path.relative(workspaceRoot, directoryPath);
-      const actualSubdirs: string[] = [relativePath.split(path.sep).join("/")];
+      const actualSubdirs: string[] = [`${relativePath.split(path.sep).join("/")}/`];
       // 递归收集 directoryPath 下的所有层级子目录
       if (fs.existsSync(directoryPath)) {
         this.collectSubDirectories(workspaceRoot, directoryPath, actualSubdirs);
@@ -362,7 +362,7 @@ export class PubspecUtils {
       }
       const childPath = path.join(directoryPath, entry.name);
       out.push(
-        path.relative(workspaceRoot, childPath).split(path.sep).join("/"),
+       `${ path.relative(workspaceRoot, childPath).split(path.sep).join("/")}/`,
       );
       this.collectSubDirectories(workspaceRoot, childPath, out);
     }

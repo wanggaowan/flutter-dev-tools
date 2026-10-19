@@ -179,10 +179,7 @@ export class ImageAssetWatcher implements vscode.Disposable {
       );
 
       if (changed) {
-        Logger.showNotification(
-          `已将新目录添加到 pubspec.yaml: ${relativePath}`,
-          "info",
-        );
+        Logger.d(`已将新目录添加到 pubspec.yaml: ${relativePath}`);
       }
     } catch (e) {
       Logger.e(`处理目录创建事件失败: ${uri.fsPath}`, e);
@@ -204,10 +201,7 @@ export class ImageAssetWatcher implements vscode.Disposable {
       );
 
       if (changed) {
-        Logger.showNotification(
-          `已从 pubspec.yaml 移除目录: ${relativePath}`,
-          "info",
-        );
+        Logger.d(`已从 pubspec.yaml 移除目录: ${relativePath}`);
       }
     } catch (e) {
       Logger.e(`处理目录删除事件失败: ${uri.fsPath}`, e);
