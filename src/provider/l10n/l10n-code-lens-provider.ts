@@ -21,37 +21,37 @@ export class L10nFoldingProvider implements vscode.Disposable {
     this.afterDecoration = vscode.window.createTextEditorDecorationType({});
 
     this.disposableList.push(
-      vscode.window.onDidChangeActiveTextEditor(
-        (editor) => {
-          if (editor) this.updateDecorations(editor);
-        },
-        null
-      )
+      vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (editor) {
+          this.updateDecorations(editor);
+        }
+      }, null),
     );
 
     this.disposableList.push(
-      vscode.workspace.onDidChangeTextDocument(
-        (e) => {
-          let editor = vscode.window.activeTextEditor;
-          if (editor && e.document === editor.document) {
-            this.updateDecorations(editor);
-          }
-        },
-        null
-      )
+      vscode.workspace.onDidChangeTextDocument(e => {
+        let editor = vscode.window.activeTextEditor;
+        if (editor && e.document === editor.document) {
+          this.updateDecorations(editor);
+        }
+      }, null),
     );
 
     this.disposableList.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
+      vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration("flutterDevTools.showL10nText")) {
           let editor = vscode.window.activeTextEditor;
-          if (editor) this.updateDecorations(editor);
+          if (editor) {
+            this.updateDecorations(editor);
+          }
         }
-      })
+      }),
     );
 
     let editor = vscode.window.activeTextEditor;
-    if (editor) this.updateDecorations(editor);
+    if (editor) {
+      this.updateDecorations(editor);
+    }
   }
 
   dispose() {
@@ -61,7 +61,9 @@ export class L10nFoldingProvider implements vscode.Disposable {
   }
 
   private updateDecorations(editor: vscode.TextEditor) {
-    if (editor.document.languageId !== "dart") return;
+    if (editor.document.languageId !== "dart") {
+      return;
+    }
 
     if (!ConfigUtils.showL10nText) {
       editor.setDecorations(this.afterDecoration, []);
@@ -72,17 +74,21 @@ export class L10nFoldingProvider implements vscode.Disposable {
     let afterDecorations: vscode.DecorationOptions[] = [];
 
     for (const match of text.matchAll(strCallRegex)) {
-      if (!match || !match[0]) continue;
+      if (!match || !match[0]) {
+        continue;
+      }
 
       let key = this.extractKey(match[0]);
-      if (!key) continue;
+      if (!key) {
+        continue;
+      }
 
       let arbValue = this.getArbValue(key);
-      if (!arbValue) continue;
+      if (!arbValue) {
+        continue;
+      }
 
-      let endPos = editor.document.positionAt(
-        match.index! + match[0].length
-      );
+      let endPos = editor.document.positionAt(match.index! + match[0].length);
 
       afterDecorations.push({
         range: new vscode.Range(endPos, endPos),
@@ -93,7 +99,7 @@ export class L10nFoldingProvider implements vscode.Disposable {
           },
         },
         hoverMessage: new vscode.MarkdownString(
-          `\`${match[0]}\` → **${arbValue}**`
+          `\`${match[0]}\` → **${arbValue}**`,
         ),
       });
     }
@@ -110,7 +116,9 @@ export class L10nFoldingProvider implements vscode.Disposable {
 
   private getArbValue(key: string): string | null {
     let arbFile = this.getTemplateArbFile();
-    if (!arbFile) return null;
+    if (!arbFile) {
+      return null;
+    }
 
     if (!this.arbCache) {
       this.arbCache = this.parseArbFile(arbFile);
@@ -123,11 +131,15 @@ export class L10nFoldingProvider implements vscode.Disposable {
     let map = new Map<string, string>();
     try {
       let content = fs.readFileSync(filePath, "utf-8");
-      if (!content) return map;
+      if (!content) {
+        return map;
+      }
 
       let json = JSON.parse(content);
       for (let k of Object.keys(json)) {
-        if (k.startsWith("@")) continue;
+        if (k.startsWith("@")) {
+          continue;
+        }
         let v = json[k];
         if (typeof v === "string") {
           map.set(k, v);
@@ -140,7 +152,9 @@ export class L10nFoldingProvider implements vscode.Disposable {
   }
 
   private getTemplateArbFile(): string | undefined {
-    if (this.templateArbFile) return this.templateArbFile;
+    if (this.templateArbFile) {
+      return this.templateArbFile;
+    }
 
     let rootDirPath = this.sdk.workspace.path;
     let resDirPath = "lib/l10n";
@@ -176,7 +190,9 @@ export class L10nFoldingProvider implements vscode.Disposable {
     }
 
     let arbFilePath = pathUtils.join(rootDirPath, resDirPath, resName);
-    if (!fs.existsSync(arbFilePath)) return undefined;
+    if (!fs.existsSync(arbFilePath)) {
+      return undefined;
+    }
 
     this.templateArbFile = arbFilePath;
     this.setupWatcher(rootDirPath, resDirPath);
@@ -190,7 +206,7 @@ export class L10nFoldingProvider implements vscode.Disposable {
       new vscode.RelativePattern(arbDir, "**"),
       false,
       false,
-      false
+      false,
     );
 
     let onChange = () => {
@@ -199,7 +215,9 @@ export class L10nFoldingProvider implements vscode.Disposable {
       this.arbDirWatcher?.dispose();
       this.arbDirWatcher = undefined;
       let editor = vscode.window.activeTextEditor;
-      if (editor) this.updateDecorations(editor);
+      if (editor) {
+        this.updateDecorations(editor);
+      }
     };
 
     watcher.onDidCreate(onChange);

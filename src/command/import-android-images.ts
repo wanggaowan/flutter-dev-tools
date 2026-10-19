@@ -7,7 +7,7 @@ import { disposeAll, isImage } from "../utils/utils";
 import { ConfigUtils } from "../utils/config-utils";
 import Logger from "../utils/logger";
 import { FlutterSdk } from "../sdk";
-import { ImageReferenceGenerator } from "../utils/image-reference-generator";
+import { COMMAND_IMPORT_ANDROID_IMAGES } from "../constants.contexts";
 
 /**
  * Android 密度目录到 Flutter 变体目录的映射
@@ -38,9 +38,9 @@ export class ImportAndroidImages implements vscode.Disposable {
   private lastSelectedDir: string | undefined; // 记录上次选择的目录（内存中，不持久化）
 
   constructor(private readonly sdk: FlutterSdk) {
-    const commandId = "flutterDevTools.importAndroidImages";
-    const disposable = vscode.commands.registerCommand(commandId, uri =>
-      this.importImages(uri),
+    const disposable = vscode.commands.registerCommand(
+      COMMAND_IMPORT_ANDROID_IMAGES,
+      uri => this.importImages(uri),
     );
     this.disposableList.push(disposable);
   }

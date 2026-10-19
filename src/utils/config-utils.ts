@@ -3,7 +3,7 @@ export class ConfigUtils {
   private constructor() {}
 
   /**
-   * 获取默认的存放图片资源的目录
+   * 获取格式化时缩进大小
    */
   static get tabSize(): number {
     return vscode.workspace.getConfiguration("editor").tabSize ?? 4;

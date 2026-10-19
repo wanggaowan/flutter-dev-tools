@@ -22,3 +22,4 @@ export const COMMAND_DELETE_ARB_KEYS = `flutterDevTools.deleteArbKeys`;
 export const COMMAND_TRANSLATE_SELECTION_TO_ARB = `flutterDevTools.translateSelectionToArb`;
 export const COMMAND_EXPLORE_FILE_LOCATION = `flutterDevTools.file.location`;
 export const COMMAND_IMPORT_ANDROID_IMAGES = `flutterDevTools.importAndroidImages`;
+export const COMMAND_DELETE_IMAGE_WITH_VARIANTS = `flutterDevTools.deleteImageWithVariants`;

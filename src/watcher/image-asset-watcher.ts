@@ -4,6 +4,7 @@ import { ConfigUtils } from "../utils/config-utils";
 import { PubspecUtils } from "../utils/pubspec-utils";
 import { ImageReferenceGenerator } from "../utils/image-reference-generator";
 import Logger from "../utils/logger";
+import { isImage } from "../utils/utils";
 
 /**
  * 监听 imageSrcPath 目录下的子目录变化，并自动更新 pubspec.yaml
@@ -11,7 +12,6 @@ import Logger from "../utils/logger";
 export class ImageAssetWatcher implements vscode.Disposable {
   private watcher: vscode.FileSystemWatcher | undefined;
   private workspaceRoot: string;
-  private pendingDeleteTimeouts: Map<string, NodeJS.Timeout> = new Map(); // 用于处理重命名场景
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -43,6 +43,8 @@ export class ImageAssetWatcher implements vscode.Disposable {
 
     // 监听文件或目录删除
     this.watcher.onDidDelete(async uri => {
+      // 如果文件和文件所在目录同时被删除，则只触发目录回调
+      // 因此无需担心删除操作重复
       await this.handleFileDeleted(uri);
     });
 
@@ -62,22 +64,19 @@ export class ImageAssetWatcher implements vscode.Disposable {
       // 处理目录创建
       if (fsStat.type === vscode.FileType.Directory) {
         await this.handleDirectoryCreated(uri);
-      }
-      // 处理图片文件创建
-      else if (fsStat.type === vscode.FileType.File) {
+        // 文件件重命名时，不会触发文件的创建，因此此处也执行一次目录下图片引用资源的生成
+        // 这在导入图片时会和下面单独处理文件有重复，但是目前也无法避免
+        await this.generateDirImageReference(uri.fsPath);
+      } else if (fsStat.type === vscode.FileType.File) {
+        // 处理图片文件创建
         const fileName = path.basename(uri.fsPath).toLowerCase();
-        if (this.isImageFile(fileName)) {
+        if (isImage(fileName)) {
           const relativePath = path.relative(this.workspaceRoot, uri.fsPath);
           Logger.d(`检测到新图片: ${relativePath}`);
-
-          // 清除该路径可能存在的待处理删除定时器（重命名场景）
-          const existingTimeout = this.pendingDeleteTimeouts.get(relativePath);
-          if (existingTimeout) {
-            clearTimeout(existingTimeout);
-            this.pendingDeleteTimeouts.delete(relativePath);
-            Logger.d(`检测到重命名操作，取消删除: ${relativePath}`);
-          }
-
+          // 这一步是为了目录创建时不是在vscode中，因此此处进行补救
+          await this.handleDirectoryCreated(
+            vscode.Uri.file(path.dirname(uri.fsPath)),
+          );
           await this.generateImageReference(uri.fsPath);
         }
       }
@@ -91,13 +90,12 @@ export class ImageAssetWatcher implements vscode.Disposable {
    */
   private async handleFileDeleted(uri: vscode.Uri): Promise<void> {
     try {
-      const relativePath = path.relative(this.workspaceRoot, uri.fsPath);
       const fileName = path.basename(uri.fsPath);
       if (fileName.startsWith(".")) {
         return;
       }
 
-      // 判断是目录还是文件（通过路径特征判断）
+      // 判断是目录还是文件（通过路径特征判断,因为文件或目录被删除，因此无法通过fs读取是文件还是目录）
       const ext = path.extname(fileName).toLowerCase();
       const isLikelyFile = [
         ".png",
@@ -110,27 +108,14 @@ export class ImageAssetWatcher implements vscode.Disposable {
       ].includes(ext);
 
       if (isLikelyFile) {
-        // 处理图片文件删除 - 延迟执行以检测重命名
-        Logger.d(`检测到图片删除: ${relativePath}`);
-
-        // 清除该路径可能存在的待处理删除定时器
-        const existingTimeout = this.pendingDeleteTimeouts.get(relativePath);
-        if (existingTimeout) {
-          clearTimeout(existingTimeout);
-          this.pendingDeleteTimeouts.delete(relativePath);
-        }
-
-        // 延迟 300ms 执行删除，以便检测是否有重命名操作
-        const timeout = setTimeout(async () => {
-          await this.removeImageReference(uri.fsPath);
-          this.pendingDeleteTimeouts.delete(relativePath);
-        }, 300);
-
-        this.pendingDeleteTimeouts.set(relativePath, timeout);
+        Logger.d(`检测到图片删除: ${fileName}`);
+        await this.removeImageReference(uri.fsPath);
       } else {
-        // 处理目录删除
-        Logger.d(`检测到目录删除: ${relativePath}`);
         await this.handleDirectoryDeleted(uri);
+        // 目录被删除，则清理一遍Images无效的资源引用
+        await ImageReferenceGenerator.doPruneMissingReferences(
+          this.workspaceRoot,
+        );
       }
     } catch (e) {
       Logger.e(`处理文件删除事件失败: ${uri.fsPath}`, e);
@@ -138,28 +123,28 @@ export class ImageAssetWatcher implements vscode.Disposable {
   }
 
   /**
-   * 检查是否是图片文件
-   */
-  private isImageFile(fileName: string): boolean {
-    const ext = fileName.toLowerCase();
-    return (
-      ext.endsWith(".png") ||
-      ext.endsWith(".jpg") ||
-      ext.endsWith(".jpeg") ||
-      ext.endsWith(".webp") ||
-      ext.endsWith(".gif") ||
-      ext.endsWith(".svg") ||
-      ext.endsWith(".bmp")
-    );
-  }
-
-  /**
    * 生成单个图片的引用
    */
   private async generateImageReference(imagePath: string): Promise<void> {
     try {
-      const generator = new ImageReferenceGenerator(this.workspaceRoot);
-      await generator.generateForSingleImage(imagePath);
+      await ImageReferenceGenerator.generateForSingleImage(
+        this.workspaceRoot,
+        imagePath,
+      );
+    } catch (e) {
+      Logger.e("生成图片引用失败", e);
+    }
+  }
+
+  /**
+   * 生成目录下所有图片的引用
+   */
+  private async generateDirImageReference(dirPath: string): Promise<void> {
+    try {
+      await ImageReferenceGenerator.generateForDirectory(
+        this.workspaceRoot,
+        dirPath,
+      );
     } catch (e) {
       Logger.e("生成图片引用失败", e);
     }
@@ -170,8 +155,10 @@ export class ImageAssetWatcher implements vscode.Disposable {
    */
   private async removeImageReference(imagePath: string): Promise<void> {
     try {
-      const generator = new ImageReferenceGenerator(this.workspaceRoot);
-      await generator.removeReferenceIfAllVariantsDeleted(imagePath);
+      await ImageReferenceGenerator.removeReferenceIfAllVariantsDeleted(
+        this.workspaceRoot,
+        imagePath,
+      );
     } catch (e) {
       Logger.e("移除图片引用失败", e);
     }
@@ -196,14 +183,6 @@ export class ImageAssetWatcher implements vscode.Disposable {
           `已将新目录添加到 pubspec.yaml: ${relativePath}`,
           "info",
         );
-
-        // 生成图片引用
-        try {
-          const generator = new ImageReferenceGenerator(this.workspaceRoot);
-          await generator.generateForDirectory(uri.fsPath);
-        } catch (e) {
-          Logger.e("生成图片引用失败", e);
-        }
       }
     } catch (e) {
       Logger.e(`处理目录创建事件失败: ${uri.fsPath}`, e);
@@ -246,6 +225,10 @@ export class ImageAssetWatcher implements vscode.Disposable {
     const imageSrcPath = ConfigUtils.imageSrcPath;
     if (imageSrcPath) {
       await PubspecUtils.syncAssetDirectories(this.workspaceRoot, imageSrcPath);
+      await ImageReferenceGenerator.regenerateForDirectory(
+        this.workspaceRoot,
+        imageSrcPath,
+      );
     }
   }
 

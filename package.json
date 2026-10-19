@@ -109,6 +109,10 @@
       {
         "command": "flutterDevTools.importAndroidImages",
         "title": "导入 Android 图片资源"
+      },
+      {
+        "command": "flutterDevTools.deleteImageWithVariants",
+        "title": "删除图片及所有变体"
       }
     ],
     "submenus": [
@@ -186,6 +190,10 @@
         {
           "command": "flutterDevTools.importAndroidImages",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.deleteImageWithVariants",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -205,6 +213,11 @@
           "command": "flutterDevTools.importAndroidImages",
           "when": "explorerResourceIsFolder",
           "group": "a@1"
+        },
+        {
+          "command": "flutterDevTools.deleteImageWithVariants",
+          "when": "resourceExtname == .png || resourceExtname == .jpg || resourceExtname == .jpeg || resourceExtname == .webp || resourceExtname == .gif || resourceExtname == .svg || resourceExtname == .bmp",
+          "group": "a@2"
         },
         {
           "command": "flutter.task.genl10n",
