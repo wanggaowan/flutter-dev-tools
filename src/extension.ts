@@ -156,12 +156,23 @@ export async function activate(
 }
 
 export async function deactivate(isRestart = false) {
-  Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
-  _imageAssetWatcher?.dispose();
-  _imageAssetWatcher = undefined;
-  _sdk?.deactivate();
-  _sdk = undefined;
-  setContext(IS_FLUTTER_PROJECT, false);
+  try {
+    Logger.i(isRestart ? "插件重启前停用" : "插件已停用");
+    if (_imageAssetWatcher) {
+      _imageAssetWatcher.dispose();
+      _imageAssetWatcher = undefined;
+    }
+    if (_sdk) {
+      _sdk.deactivate();
+      _sdk = undefined;
+    }
+    setContext(IS_FLUTTER_PROJECT, false);
+  } catch (error) {
+    // 忽略取消错误，避免在停用时抛出 Canceled 异常
+    if (error instanceof Error && error.name !== "Canceled") {
+      console.error("Deactivation error:", error);
+    }
+  }
 }
 
 // 注册图片预览视图

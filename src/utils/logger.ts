@@ -8,7 +8,7 @@ class Logger {
   }
 
   static i(message?: any, ...optionalParams: any[]) {
-    if (this.logEnable()) {
+    if (!this.logEnable()) {
       return;
     }
 
@@ -16,7 +16,7 @@ class Logger {
   }
 
   static d(message?: any, ...optionalParams: any[]) {
-    if (this.logEnable()) {
+    if (!this.logEnable()) {
       return;
     }
 
@@ -24,7 +24,7 @@ class Logger {
   }
 
   static w(message?: any, ...optionalParams: any[]) {
-    if (this.logEnable()) {
+    if (!this.logEnable()) {
       return;
     }
 
@@ -32,7 +32,7 @@ class Logger {
   }
 
   static e(message?: any, ...optionalParams: any[]) {
-    if (this.logEnable()) {
+    if (!this.logEnable()) {
       return;
     }
 

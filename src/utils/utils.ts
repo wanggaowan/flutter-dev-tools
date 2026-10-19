@@ -7,7 +7,10 @@ export function disposeAll(disposables: vscode.Disposable[]) {
     try {
       void d.dispose();
     } catch (e) {
-      console.warn(e);
+      // 忽略取消错误，避免在清理时抛出异常
+      if (e instanceof Error && e.name !== "Canceled") {
+        console.warn("Dispose error:", e);
+      }
     }
   }
 }

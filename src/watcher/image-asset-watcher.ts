@@ -170,7 +170,7 @@ export class ImageAssetWatcher implements vscode.Disposable {
   private async handleDirectoryCreated(uri: vscode.Uri): Promise<void> {
     try {
       const relativePath = path.relative(this.workspaceRoot, uri.fsPath);
-      Logger.d(`检测到新目录: ${relativePath}`);
+      Logger.d(`检测到新目录/目录下文件变更: ${relativePath}`);
 
       // 添加到 pubspec.yaml
       const changed = await PubspecUtils.ensureAssetDirectory(
