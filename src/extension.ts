@@ -28,9 +28,11 @@ import { ImportAndroidImages } from "./command/import-android-images";
 import { DeleteImageWithVariants } from "./command/delete-image-variants";
 import { RenameImageWithVariants } from "./command/rename-image-variants";
 import { ImageAssetWatcher } from "./watcher/image-asset-watcher";
+import { L10nArbWatcher } from "./watcher/l10n-arb-watcher";
 
 let _sdk: FlutterSdk | undefined;
 let _imageAssetWatcher: ImageAssetWatcher | undefined;
+let _l10nArbWatcher: L10nArbWatcher | undefined;
 
 export function getSdk(): FlutterSdk | undefined {
   return _sdk;
@@ -145,6 +147,10 @@ export async function activate(
   _imageAssetWatcher = new ImageAssetWatcher(rootPath.fsPath);
   context.subscriptions.push(_imageAssetWatcher);
 
+  // 启动 l10n arb 文件监听器
+  _l10nArbWatcher = new L10nArbWatcher(rootPath.fsPath);
+  context.subscriptions.push(_l10nArbWatcher);
+
   // 监听配置变更，重新初始化监听器
   const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async e => {
     if (e.affectsConfiguration("flutterDevTools.imageSrcPath")) {
@@ -161,6 +167,10 @@ export async function deactivate(isRestart = false) {
     if (_imageAssetWatcher) {
       _imageAssetWatcher.dispose();
       _imageAssetWatcher = undefined;
+    }
+    if (_l10nArbWatcher) {
+      _l10nArbWatcher.dispose();
+      _l10nArbWatcher = undefined;
     }
     if (_sdk) {
       _sdk.deactivate();

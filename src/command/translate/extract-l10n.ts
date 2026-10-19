@@ -296,7 +296,8 @@ export class ExtractL10n {
     if (errorMsg) {
       Logger.showNotification(errorMsg, "error");
     }
-    TerminalCommand.genl10n();
+    // 已经有arb文件监听器，自动触发，无需手动调用
+    // TerminalCommand.genl10n();
   }
 
   static keyRegex = /^[A-Za-z_][a-zA-Z0-9]*/;
