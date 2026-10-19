@@ -91,6 +91,16 @@ export class ConfigUtils {
   }
 
   /**
+   * 展示多语言真实文本最多长度，超出省略
+   */
+  static get showL10nTextMaxLength(): number {
+    return (
+      vscode.workspace.getConfiguration("flutterDevTools")
+        .showL10nTextMaxLength ?? 0
+    );
+  }
+
+  /**
    * 阿里云翻译api ak
    */
   static get aliAk(): string | undefined | null {

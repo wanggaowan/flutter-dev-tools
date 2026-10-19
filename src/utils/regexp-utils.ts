@@ -27,6 +27,11 @@ export const strCallRegex = new RegExp(
   /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*(\([^)]*\))?/g
 );
 
+// 匹配 S.current.xxx 或 S.of(xxx).xxx 格式字符串，支持带参数调用如 S.current.xxx(arg1, arg2),以;或,结尾
+export const strCallRegexWithEndSymbol = new RegExp(
+  /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*(\([^)]*\))?(\s*[;,]|)/g
+);
+
 // 匹配图片资源的引用，如Images.xxx，点号前后允许空格和换行
 export const imageRefRegex = new RegExp(/Images\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*/g);
 

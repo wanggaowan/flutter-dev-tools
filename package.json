@@ -435,7 +435,7 @@
         }
       },
       {
-        "title": "翻译",
+        "title": "多语言",
         "properties": {
           "flutterDevTools.aliAk": {
             "type": "string",
@@ -459,6 +459,13 @@
             "type": "boolean",
             "default": true,
             "description": "是否在代码中展示多语言真实文本",
+            "scope": "window"
+          },
+          "flutterDevTools.showL10nTextMaxLength": {
+            "type": "number",
+            "default": 20,
+            "minimum": 0,
+            "description": "在代码中展示多语言真实文本最大长度，超出则省略(0代表无限制)",
             "scope": "window"
           }
         }

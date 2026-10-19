@@ -4,7 +4,7 @@ import * as yaml from "yaml";
 import pathUtils from "path";
 import { FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
-import { strCallRegex } from "../../utils/regexp-utils";
+import { strCallRegexWithEndSymbol } from "../../utils/regexp-utils";
 import { ConfigUtils } from "../../utils/config-utils";
 
 /**
@@ -73,7 +73,7 @@ export class L10nFoldingProvider implements vscode.Disposable {
     let text = editor.document.getText();
     let afterDecorations: vscode.DecorationOptions[] = [];
 
-    for (const match of text.matchAll(strCallRegex)) {
+    for (const match of text.matchAll(strCallRegexWithEndSymbol)) {
       if (!match || !match[0]) {
         continue;
       }
@@ -90,11 +90,24 @@ export class L10nFoldingProvider implements vscode.Disposable {
 
       let endPos = editor.document.positionAt(match.index! + match[0].length);
 
+      let showValue = arbValue;
+      const showL10nTextMaxLength = ConfigUtils.showL10nTextMaxLength;
+      if (
+        showL10nTextMaxLength > 0 &&
+        showValue.length > showL10nTextMaxLength
+      ) {
+        if (showL10nTextMaxLength <= 3) {
+          showValue = "...";
+        } else {
+          showValue = showValue.substring(0, showL10nTextMaxLength - 3) + "...";
+        }
+      }
+
       afterDecorations.push({
         range: new vscode.Range(endPos, endPos),
         renderOptions: {
           after: {
-            contentText: ` // ${arbValue}`,
+            contentText: ` // ${showValue}`,
             color: new vscode.ThemeColor("descriptionForeground"),
           },
         },
@@ -110,7 +123,10 @@ export class L10nFoldingProvider implements vscode.Disposable {
   private extractKey(matchText: string): string | null {
     let cleaned = matchText.replace(/\(.*\)/, "");
     let splits = cleaned.split(".");
-    let key = splits[splits.length - 1]?.trim();
+    let key = splits[splits.length - 1]
+      ?.replace(";", "")
+      .replace(",", "")
+      .trim();
     return key && key.length > 0 ? key : null;
   }
 
