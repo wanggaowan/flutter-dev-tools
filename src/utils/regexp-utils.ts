@@ -44,7 +44,7 @@ export const jsonKeyRegex = new RegExp(/".*"\s*:/g);
 /// 匹配给定methodName的get方法，如static String get methodName => 'xxx'
 export function getStaticGetMethodRegex(methodName: string) {
   return new RegExp(
-    `\\s*static\\s+String\\s+get\\s+${methodName}\\s*=>\\s*('([^']*)'|"([^"]*)")\\s*;\\n?`,
+    `\\sstatic\\s+String\\s+get\\s+${methodName}\\s*=>\\s*('([^']*)'|"([^"]*)")\\s*;\\n?`,
     "g"
   );
 }

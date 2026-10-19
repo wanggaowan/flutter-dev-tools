@@ -113,6 +113,10 @@
       {
         "command": "flutterDevTools.deleteImageWithVariants",
         "title": "删除图片及所有变体"
+      },
+      {
+        "command": "flutterDevTools.renameImageWithVariants",
+        "title": "重命名图片及所有变体"
       }
     ],
     "submenus": [
@@ -194,6 +198,10 @@
         {
           "command": "flutterDevTools.deleteImageWithVariants",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.renameImageWithVariants",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -218,6 +226,11 @@
           "command": "flutterDevTools.deleteImageWithVariants",
           "when": "resourceExtname == .png || resourceExtname == .jpg || resourceExtname == .jpeg || resourceExtname == .webp || resourceExtname == .gif || resourceExtname == .svg || resourceExtname == .bmp",
           "group": "a@2"
+        },
+        {
+          "command": "flutterDevTools.renameImageWithVariants",
+          "when": "resourceExtname == .png || resourceExtname == .jpg || resourceExtname == .jpeg || resourceExtname == .webp || resourceExtname == .gif || resourceExtname == .svg || resourceExtname == .bmp",
+          "group": "a@3"
         },
         {
           "command": "flutter.task.genl10n",

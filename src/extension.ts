@@ -26,6 +26,7 @@ import { TranslateSelectionToArb } from "./command/translate/translate-selection
 import { RouterDefinitionProvider } from "./provider/router-definition-provider";
 import { ImportAndroidImages } from "./command/import-android-images";
 import { DeleteImageWithVariants } from "./command/delete-image-variants";
+import { RenameImageWithVariants } from "./command/rename-image-variants";
 import { ImageAssetWatcher } from "./watcher/image-asset-watcher";
 
 let _sdk: FlutterSdk | undefined;
@@ -135,6 +136,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new DeleteImageWithVariants(_sdk);
+  context.subscriptions.push(disposable);
+
+  disposable = new RenameImageWithVariants(_sdk);
   context.subscriptions.push(disposable);
 
   // 启动图片资源目录监听器
