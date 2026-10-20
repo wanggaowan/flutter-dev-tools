@@ -31,6 +31,8 @@ interface PendingImageGroup {
   hasTargetConflict: boolean; // 与目标目录已有文件冲突
   importLast: boolean; // 批次冲突勾选状态：true 导入最后一个同名文件
   overwrite: boolean; // 目标冲突勾选状态：true 覆盖目标目录文件
+  batchPreviews: string[]; // 批次冲突时的冲突图片预览
+  targetPreviews: string[]; // 目标冲突时已存在文件的预览
 }
 
 /**
@@ -214,7 +216,9 @@ export class ImportAndroidImages implements vscode.Disposable {
     try {
       for (const [dirName, dirPath] of densityDirsToProcess) {
         const variant = DENSITY_MAP[dirName];
-        const imageType = dirName.startsWith("drawable") ? "drawable" : "mipmap";
+        const imageType = dirName.startsWith("drawable")
+          ? "drawable"
+          : "mipmap";
         await this.collectPendingImagesAsGroups(
           dirPath,
           variant,
@@ -251,8 +255,15 @@ export class ImportAndroidImages implements vscode.Disposable {
       }
     }
 
+    // 生成预览用的 base64 数据，冲突检测的冲突图片展示也依赖此数据
+    await this.convertImagesToBase64(drawableGroups);
+    await this.convertImagesToBase64(mipmapGroups);
+
     // 初始化冲突状态
-    this.refreshGroupConflicts([...drawableGroups, ...mipmapGroups], selectedPath);
+    this.refreshGroupConflicts(
+      [...drawableGroups, ...mipmapGroups],
+      selectedPath,
+    );
 
     // 显示预览对话框，让用户确认和重命名
     const confirmedGroups = await this.showPreviewDialog(
@@ -385,7 +396,7 @@ export class ImportAndroidImages implements vscode.Disposable {
       for (const file of files) {
         const sourceFile = path.join(sourceDir, file);
         const stat = fs.statSync(sourceFile);
-        
+
         // 跳过子目录
         if (!stat.isFile()) {
           continue;
@@ -403,7 +414,7 @@ export class ImportAndroidImages implements vscode.Disposable {
         // 获取或创建图片组
         const groupKey = `${baseName}${ext}`;
         let group = pendingImageGroups.get(groupKey);
-        
+
         if (!group) {
           group = {
             baseName: baseName,
@@ -415,6 +426,8 @@ export class ImportAndroidImages implements vscode.Disposable {
             hasTargetConflict: false,
             importLast: false,
             overwrite: false,
+            batchPreviews: [],
+            targetPreviews: [],
           };
           pendingImageGroups.set(groupKey, group);
         }
@@ -441,7 +454,7 @@ export class ImportAndroidImages implements vscode.Disposable {
     // 创建 WebView 面板
     const panel = vscode.window.createWebviewPanel(
       "importAndroidImagesPreview",
-      "导入 Android 图片预览",
+      "待导入图片预览",
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -449,58 +462,55 @@ export class ImportAndroidImages implements vscode.Disposable {
       },
     );
 
-    return new Promise<PendingImageGroup[] | undefined>((resolve) => {
+    return new Promise<PendingImageGroup[] | undefined>(resolve => {
       let isResolved = false;
 
-      // 将图片转换为 base64
-      this.convertImagesToBase64(drawableGroups).then(() => {
-        this.convertImagesToBase64(mipmapGroups).then(() => {
-          // 设置 HTML 内容
-          panel.webview.html = this.getPreviewHtml(drawableGroups, mipmapGroups);
-        });
-      });
+      // 设置 HTML 内容
+      panel.webview.html = this.getPreviewHtml(drawableGroups, mipmapGroups);
 
       // 监听消息
-      const messageListener = panel.webview.onDidReceiveMessage(async (message) => {
-        switch (message.command) {
-          case "confirm":
-            if (isResolved) {
-              return;
+      const messageListener = panel.webview.onDidReceiveMessage(
+        async message => {
+          switch (message.command) {
+            case "confirm":
+              if (isResolved) {
+                return;
+              }
+              // 用户确认导入，勾选状态已包含在 groups 中，冲突不再阻断导入
+              isResolved = true;
+              panel.dispose();
+              resolve(message.groups as PendingImageGroup[]);
+              break;
+
+            case "cancel":
+              if (isResolved) {
+                return;
+              }
+              // 用户取消
+              isResolved = true;
+              panel.dispose();
+              resolve(undefined);
+              break;
+
+            case "checkConflict": {
+              // 实时检查所有图片组的冲突状态
+              const names = message.names as string[];
+              const allGroups = [...drawableGroups, ...mipmapGroups];
+              const states = this.computeConflictStates(
+                allGroups,
+                names,
+                targetBasePath,
+              );
+
+              panel.webview.postMessage({
+                command: "updateConflicts",
+                states: states,
+              });
+              break;
             }
-            // 用户确认导入，勾选状态已包含在 groups 中，冲突不再阻断导入
-            isResolved = true;
-            panel.dispose();
-            resolve(message.groups as PendingImageGroup[]);
-            break;
-
-          case "cancel":
-            if (isResolved) {
-              return;
-            }
-            // 用户取消
-            isResolved = true;
-            panel.dispose();
-            resolve(undefined);
-            break;
-
-          case "checkConflict": {
-            // 实时检查所有图片组的冲突状态
-            const names = message.names as string[];
-            const allGroups = [...drawableGroups, ...mipmapGroups];
-            const states = this.computeConflictStates(
-              allGroups,
-              names,
-              targetBasePath,
-            );
-
-            panel.webview.postMessage({
-              command: "updateConflicts",
-              states: states,
-            });
-            break;
           }
-        }
-      });
+        },
+      );
 
       // 监听面板关闭
       const disposeListener = panel.onDidDispose(() => {
@@ -517,29 +527,42 @@ export class ImportAndroidImages implements vscode.Disposable {
   /**
    * 将图片转换为 base64 编码用于预览
    */
-  private async convertImagesToBase64(groups: PendingImageGroup[]): Promise<void> {
+  private async convertImagesToBase64(
+    groups: PendingImageGroup[],
+  ): Promise<void> {
     for (const group of groups) {
       for (const variant of group.variants) {
-        try {
-          const imageData = fs.readFileSync(variant.sourcePath);
-          const base64 = imageData.toString("base64");
-          const ext = path.extname(variant.sourcePath).toLowerCase();
-          let mimeType = "image/png";
-          if (ext === ".jpg" || ext === ".jpeg") {
-            mimeType = "image/jpeg";
-          } else if (ext === ".webp") {
-            mimeType = "image/webp";
-          } else if (ext === ".gif") {
-            mimeType = "image/gif";
-          } else if (ext === ".svg") {
-            mimeType = "image/svg+xml";
-          }
+        const dataUri = this.toImageDataUri(variant.sourcePath);
+        if (dataUri) {
           // 保存到 previewData，不修改 sourcePath
-          variant.previewData = `data:${mimeType};base64,${base64}`;
-        } catch (e) {
-          Logger.e(`读取图片失败: ${variant.sourcePath}`, e);
+          variant.previewData = dataUri;
+        } else {
+          Logger.e(`读取图片失败: ${variant.sourcePath}`);
         }
       }
+    }
+  }
+
+  /**
+   * 读取图片文件并转换为 data URI
+   */
+  private toImageDataUri(filePath: string): string | undefined {
+    try {
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = "image/png";
+      if (ext === ".jpg" || ext === ".jpeg") {
+        mimeType = "image/jpeg";
+      } else if (ext === ".webp") {
+        mimeType = "image/webp";
+      } else if (ext === ".gif") {
+        mimeType = "image/gif";
+      } else if (ext === ".svg") {
+        mimeType = "image/svg+xml";
+      }
+      return `data:${mimeType};base64,${fs.readFileSync(filePath).toString("base64")}`;
+    } catch (e) {
+      Logger.e(`读取图片失败: ${filePath}`, e);
+      return undefined;
     }
   }
 
@@ -550,21 +573,25 @@ export class ImportAndroidImages implements vscode.Disposable {
     drawableGroups: PendingImageGroup[],
     mipmapGroups: PendingImageGroup[],
   ): string {
-    const drawableJson = JSON.stringify(drawableGroups.map(g => ({
-      ...g,
-      variants: g.variants.map(v => ({...v}))
-    })));
-    const mipmapJson = JSON.stringify(mipmapGroups.map(g => ({
-      ...g,
-      variants: g.variants.map(v => ({...v}))
-    })));
-    
+    const drawableJson = JSON.stringify(
+      drawableGroups.map(g => ({
+        ...g,
+        variants: g.variants.map(v => ({ ...v })),
+      })),
+    );
+    const mipmapJson = JSON.stringify(
+      mipmapGroups.map(g => ({
+        ...g,
+        variants: g.variants.map(v => ({ ...v })),
+      })),
+    );
+
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>导入 Android 图片预览</title>
+  <title>待导入图片预览</title>
   <style>
     html,
     body {
@@ -684,6 +711,22 @@ export class ImportAndroidImages implements vscode.Disposable {
       line-height: 1.4;
     }
     
+    .conflict-thumbs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    
+    .conflict-thumbs img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background-color: var(--vscode-editor-background);
+    }
+    
     .conflict-checkbox {
       flex-shrink: 0;
       width: 14px;
@@ -734,8 +777,6 @@ export class ImportAndroidImages implements vscode.Disposable {
   </style>
 </head>
 <body>
-  <h2>待导入的图片预览</h2>
-  
   <div id="content"></div>
   
   <div class="buttons">
@@ -765,6 +806,12 @@ export class ImportAndroidImages implements vscode.Disposable {
       if (el) {
         el.classList[visible ? 'add' : 'remove']('show');
       }
+    }
+    
+    function renderThumbs(previews) {
+      return (previews || [])
+        .map(src => '<img src="' + src + '">')
+        .join('');
     }
     
     // 渲染分组列表
@@ -799,6 +846,9 @@ export class ImportAndroidImages implements vscode.Disposable {
         // 批次内同名冲突提示
         const batchClass = group.hasBatchConflict ? ' show' : '';
         html += '<div class="conflict-row' + batchClass + '" id="batch-conflict-' + index + '">' +
+                '<div class="conflict-thumbs" id="batch-thumbs-' + index + '">' +
+                renderThumbs(group.batchPreviews) +
+                '</div>' +
                 '<span class="conflict-text">导入的文件存在相同文件，勾选则导入最后一个同名文件，否则导入第一个同名文件。</span>' +
                 '<input type="checkbox" class="conflict-checkbox" data-index="' + index + '" data-kind="batch"' +
                 (group.importLast ? ' checked' : '') + '>' +
@@ -807,6 +857,9 @@ export class ImportAndroidImages implements vscode.Disposable {
         // 目标目录已存在冲突提示
         const targetClass = group.hasTargetConflict ? ' show' : '';
         html += '<div class="conflict-row' + targetClass + '" id="target-conflict-' + index + '">' +
+                '<div class="conflict-thumbs" id="target-thumbs-' + index + '">' +
+                renderThumbs(group.targetPreviews) +
+                '</div>' +
                 '<span class="conflict-text">已存在同名文件,是否覆盖原文件？不勾选则跳过导入。</span>' +
                 '<input type="checkbox" class="conflict-checkbox" data-index="' + index + '" data-kind="target"' +
                 (group.overwrite ? ' checked' : '') + '>' +
@@ -883,6 +936,16 @@ export class ImportAndroidImages implements vscode.Disposable {
         message.states.forEach((state, index) => {
           toggleConflictRow('batch-conflict-' + index, state.batch);
           toggleConflictRow('target-conflict-' + index, state.target);
+          
+          // 刷新冲突图片展示
+          const batchThumbs = document.getElementById('batch-thumbs-' + index);
+          if (batchThumbs) {
+            batchThumbs.innerHTML = renderThumbs(state.batchPreviews);
+          }
+          const targetThumbs = document.getElementById('target-thumbs-' + index);
+          if (targetThumbs) {
+            targetThumbs.innerHTML = renderThumbs(state.targetPreviews);
+          }
         });
         
         // 重命名后产生新的组内冲突时，参照已有同名冲突的勾选状态设置默认值
@@ -939,7 +1002,12 @@ export class ImportAndroidImages implements vscode.Disposable {
     allGroups: PendingImageGroup[],
     names: string[],
     targetBasePath: string,
-  ): Array<{ batch: boolean; target: boolean }> {
+  ): Array<{
+    batch: boolean;
+    target: boolean;
+    batchPreviews: string[];
+    targetPreviews: string[];
+  }> {
     const nameCount = new Map<string, number>();
     for (const name of names) {
       nameCount.set(name, (nameCount.get(name) ?? 0) + 1);
@@ -953,20 +1021,69 @@ export class ImportAndroidImages implements vscode.Disposable {
       const hasDuplicateVariant =
         new Set(variantKeys).size !== variantKeys.length;
       const hasSameNameGroup = (nameCount.get(name) ?? 0) > 1;
-      // 只检查该组实际会写入的变体目录
-      const hasTargetConflict = variantKeys.some(key =>
-        fs.existsSync(
-          path.join(
-            key ? path.join(targetBasePath, key) : targetBasePath,
-            name,
-          ),
-        ),
+
+      // 只检查该组实际会写入的变体目录；相同图片只取一张，优先从低分辨率目录查找
+      const targetPreviews: string[] = [];
+      let hasTargetConflict = false;
+      const variantOrder = ["", "1.5x", "2.0x", "3.0x", "4.0x"];
+      const sortedVariantKeys = [...new Set(variantKeys)].sort(
+        (a, b) => variantOrder.indexOf(a) - variantOrder.indexOf(b),
       );
+      for (const key of sortedVariantKeys) {
+        const targetFile = path.join(
+          key ? path.join(targetBasePath, key) : targetBasePath,
+          name,
+        );
+        if (!fs.existsSync(targetFile)) {
+          continue;
+        }
+        hasTargetConflict = true;
+        const preview = this.toImageDataUri(targetFile);
+        if (preview) {
+          targetPreviews.push(preview);
+        }
+        break;
+      }
+
+      // 批次冲突时收集冲突图片来源：组内重复文件 + 其它同名组的代表图片
+      const batchPreviews: string[] = [];
+      if (hasDuplicateVariant || hasSameNameGroup) {
+        const seenKeys = new Set<string>();
+        for (const variant of group.variants) {
+          const key = variant.variant ?? "";
+          if (seenKeys.has(key)) {
+            if (
+              variant.previewData &&
+              !batchPreviews.includes(variant.previewData)
+            ) {
+              batchPreviews.push(variant.previewData);
+            }
+          } else {
+            seenKeys.add(key);
+          }
+        }
+        if (hasSameNameGroup) {
+          allGroups.forEach((other, otherIndex) => {
+            if (
+              otherIndex === index ||
+              (names[otherIndex] ?? other.targetName) !== name
+            ) {
+              return;
+            }
+            const preview = other.variants[0]?.previewData;
+            if (preview && !batchPreviews.includes(preview)) {
+              batchPreviews.push(preview);
+            }
+          });
+        }
+      }
 
       return {
         // 优先检测目标目录冲突，无目标冲突时才检测批次内冲突
         batch: !hasTargetConflict && (hasDuplicateVariant || hasSameNameGroup),
         target: hasTargetConflict,
+        batchPreviews,
+        targetPreviews,
       };
     });
   }
@@ -986,6 +1103,8 @@ export class ImportAndroidImages implements vscode.Disposable {
     allGroups.forEach((group, index) => {
       group.hasBatchConflict = states[index].batch;
       group.hasTargetConflict = states[index].target;
+      group.batchPreviews = states[index].batchPreviews;
+      group.targetPreviews = states[index].targetPreviews;
     });
   }
 
@@ -1035,7 +1154,10 @@ export class ImportAndroidImages implements vscode.Disposable {
 
         // 复制文件
         const content = fs.readFileSync(variant.sourcePath);
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(targetFile), content);
+        await vscode.workspace.fs.writeFile(
+          vscode.Uri.file(targetFile),
+          content,
+        );
         writtenFiles.add(targetFile);
 
         copiedCount++;
