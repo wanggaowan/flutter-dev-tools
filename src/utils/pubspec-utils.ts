@@ -309,14 +309,12 @@ export class PubspecUtils {
   }
 
   /**
-   * 从 assets 列表中移除指定的目录
+   * 从 assets 列表中移除无效的目录
    * @param workspaceRoot 工作区根目录
-   * @param directoryPath 要移除的目录绝对路径
    * @returns 是否发生了改变
    */
   static async removeAssetDirectory(
     workspaceRoot: string,
-    directoryPath: string,
   ): Promise<boolean> {
     return this.enqueue(async () => {
       const pubspecPath = this.getPubspecPath(workspaceRoot);
@@ -334,7 +332,7 @@ export class PubspecUtils {
 
       // this.setAssets(pubspec, assets);
       this.writePubspecAssetsOnly(pubspecPath, assets);
-      Logger.d(`已从 pubspec.yaml 移除资源目录: ${directoryPath}`);
+      Logger.d(`已从 pubspec.yaml 移除无效资源目录`);
       return true;
     });
   }

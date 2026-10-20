@@ -12,6 +12,8 @@ import { isImage } from "../utils/utils";
 export class ImageAssetWatcher implements vscode.Disposable {
   private watcher: vscode.FileSystemWatcher | undefined;
   private workspaceRoot: string;
+  private clearDirectoryDeletedSetTimeoutId: any;
+  private clearImageReferenceSetTimeoutId: any;
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -37,15 +39,15 @@ export class ImageAssetWatcher implements vscode.Disposable {
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     // 监听文件或目录创建
-    this.watcher.onDidCreate(async uri => {
-      await this.handleFileCreated(uri);
+    this.watcher.onDidCreate(uri => {
+      this.handleFileCreated(uri);
     });
 
     // 监听文件或目录删除
-    this.watcher.onDidDelete(async uri => {
+    this.watcher.onDidDelete(uri => {
       // 如果文件和文件所在目录同时被删除，则只触发目录回调
       // 因此无需担心删除操作重复
-      await this.handleFileDeleted(uri);
+      this.handleFileDeleted(uri);
     });
 
     Logger.d(`已启动图片资源目录监听器: ${imageSrcPath}`);
@@ -95,6 +97,9 @@ export class ImageAssetWatcher implements vscode.Disposable {
         return;
       }
 
+      // 由于uri标识的数据被删除，因此无法准确的判断uri标识的资源原来是文件还是目录
+      // 比如使用path.extname(fileName)获取后缀名，但是遇到1.5x,2.0x类似这种目录
+      // .5x,.0x会被当做后缀。所以识别指定文件后缀，不再此列举中的图片当做文件处理
       // 判断是目录还是文件（通过路径特征判断,因为文件或目录被删除，因此无法通过fs读取是文件还是目录）
       const ext = path.extname(fileName).toLowerCase();
       const isLikelyFile = [
@@ -108,14 +113,12 @@ export class ImageAssetWatcher implements vscode.Disposable {
       ].includes(ext);
 
       if (isLikelyFile) {
-        Logger.d(`检测到图片删除: ${fileName}`);
-        await this.removeImageReference(uri.fsPath);
+        this.clearImageReference();
       } else {
-        await this.handleDirectoryDeleted(uri);
-        // 目录被删除，则清理一遍Images无效的资源引用
-        await ImageReferenceGenerator.doPruneMissingReferences(
-          this.workspaceRoot,
-        );
+        // 目录
+        this.clearDirectoryDeleted();
+        // 目录下可能包含图片数据，因此目录删除时也要清理图片数据
+        this.clearImageReference();
       }
     } catch (e) {
       Logger.e(`处理文件删除事件失败: ${uri.fsPath}`, e);
@@ -151,17 +154,29 @@ export class ImageAssetWatcher implements vscode.Disposable {
   }
 
   /**
-   * 移除单个图片的引用（检查所有变体）
+   * 清理图片的引用（包含所有无效的图片）
+   * 200ms 内多次调用只执行最后一次
    */
-  private async removeImageReference(imagePath: string): Promise<void> {
-    try {
-      await ImageReferenceGenerator.removeReferenceIfAllVariantsDeleted(
-        this.workspaceRoot,
-        imagePath,
-      );
-    } catch (e) {
-      Logger.e("移除图片引用失败", e);
+  private async clearImageReference(): Promise<void> {
+    Logger.d(`检测到图片删除`);
+    // 取消之前的定时器
+    if (this.clearImageReferenceSetTimeoutId) {
+      Logger.d(`图片删除，图片引用方法清理操作被取消`);
+      clearTimeout(this.clearImageReferenceSetTimeoutId);
     }
+
+    this.clearImageReferenceSetTimeoutId = setTimeout(async () => {
+      try {
+        Logger.d(`执行图片引用方法清理操作`);
+        await ImageReferenceGenerator.doPruneMissingReferences(
+          this.workspaceRoot,
+        );
+      } catch (e) {
+        Logger.e("移除图片引用失败", e);
+      } finally {
+        this.clearImageReferenceSetTimeoutId = undefined;
+      }
+    }, 200);
   }
 
   /**
@@ -187,25 +202,27 @@ export class ImageAssetWatcher implements vscode.Disposable {
   }
 
   /**
-   * 处理目录删除事件
+   * 清理无效目录数据
+   * 200ms 内多次调用只执行最后一次
    */
-  private async handleDirectoryDeleted(uri: vscode.Uri): Promise<void> {
-    try {
-      const relativePath = path.relative(this.workspaceRoot, uri.fsPath);
-      Logger.d(`检测到目录删除: ${relativePath}`);
-
-      // 从 pubspec.yaml 移除
-      const changed = await PubspecUtils.removeAssetDirectory(
-        this.workspaceRoot,
-        uri.fsPath,
-      );
-
-      if (changed) {
-        Logger.d(`已从 pubspec.yaml 移除目录: ${relativePath}`);
-      }
-    } catch (e) {
-      Logger.e(`处理目录删除事件失败: ${uri.fsPath}`, e);
+  private async clearDirectoryDeleted(): Promise<void> {
+    Logger.d(`检测到目录删除`);
+    // 取消之前的定时器
+    if (this.clearDirectoryDeletedSetTimeoutId) {
+      Logger.d(`目录删除清理操作被取消`);
+      clearTimeout(this.clearDirectoryDeletedSetTimeoutId);
     }
+
+    this.clearDirectoryDeletedSetTimeoutId = setTimeout(async () => {
+      try {
+        Logger.d(`执行目录删除清理操作`);
+        await PubspecUtils.removeAssetDirectory(this.workspaceRoot);
+      } catch (e) {
+        Logger.e(`处理目录删除事件失败`, e);
+      } finally {
+        this.clearDirectoryDeletedSetTimeoutId = undefined;
+      }
+    }, 200);
   }
 
   /**
