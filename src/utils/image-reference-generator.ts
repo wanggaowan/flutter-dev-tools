@@ -3,10 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigUtils } from "./config-utils";
 import { isImage, lowerCamelCase } from "./utils";
-import { ImageVariantUtils } from "./image-variant-utils";
 import Logger from "./logger";
 import { ForamtUtils } from "./format-utils";
-import { getStaticGetMethodRegex } from "./regexp-utils";
 
 /**
  * 图片引用生成器
@@ -176,6 +174,7 @@ export class ImageReferenceGenerator {
 
   /**
    * 收集指定目录下的所有图片文件（去重）
+   * 只扫描主目录（非变体目录），变体目录下的图片不单独生成引用
    * @param directoryPath 目录绝对路径
    * @returns 图片相对路径数组（相对于项目根目录）
    */
@@ -183,10 +182,17 @@ export class ImageReferenceGenerator {
     workspaceRoot: string,
     directoryPath: string,
   ): string[] {
-    // key: 不带扩展名和变体的路径, value: 完整相对路径
-    const images: Map<string, string> = new Map();
-
+    const images: string[] = [];
     if (!fs.existsSync(directoryPath)) {
+      return [];
+    }
+
+    // 计算相对于项目根目录的路径
+    const relativePath = path.relative(workspaceRoot, directoryPath);
+    // 检查路径中是否包含变体目录（1.5x, 2.0x, 3.0x, 4.0x 等），如果是则不处理
+    const pathParts = relativePath.split(path.sep);
+    const hasVariantDir = pathParts.some(part => /^\d+(\.\d+)?x$/.test(part));
+    if (hasVariantDir) {
       return [];
     }
 
@@ -197,28 +203,34 @@ export class ImageReferenceGenerator {
         const fullPath = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
+          // 跳过变体目录（1.5x, 2.0x, 3.0x, 4.0x 等）
+          if (/^\d+(\.\d+)?x$/.test(entry.name)) {
+            continue;
+          }
           // 递归扫描子目录
           scanDirectory(fullPath);
         } else if (entry.isFile() && isImage(entry.name)) {
           // 计算相对于项目根目录的路径
           const relativePath = path.relative(workspaceRoot, fullPath);
-
-          // 生成去重的 key：去掉变体目录（1.5x, 2.0x, 3.0x, 4.0x）和扩展名
-          const withoutVariant = relativePath
-            .replace(/\/[0-9]+\.[0-9]x\//g, "/")
-            .replace(/\.[^/.]+$/, "");
-
-          // 如果这个 key 不存在，或者当前路径更短（优先选择无变体的），则添加
-          const existing = images.get(withoutVariant);
-          if (!existing || relativePath.length < existing.length) {
-            images.set(withoutVariant, relativePath);
-          }
+          images.push(relativePath);
         }
       }
     };
 
     scanDirectory(directoryPath);
-    return Array.from(images.values());
+    return images;
+  }
+
+  /**
+   * 指定路径是否在变体目录下
+   * @param path 检测的路径
+   */
+  private static isInVariantDir(workspaceRoot: string, dirPath: string) {
+    // 计算相对于项目根目录的路径
+    const relativePath = path.relative(workspaceRoot, dirPath);
+    // 检查路径中是否包含变体目录（1.5x, 2.0x, 3.0x, 4.0x 等），如果是则不处理
+    const pathParts = relativePath.split(path.sep);
+    return pathParts.some(part => /^\d+(\.\d+)?x$/.test(part));
   }
 
   /**
@@ -229,6 +241,11 @@ export class ImageReferenceGenerator {
     workspaceRoot: string,
     directoryPath: string,
   ): Promise<void> {
+    if (this.isInVariantDir(workspaceRoot, directoryPath)) {
+      Logger.d(`跳过变体目录下的图片: ${directoryPath}`);
+      return;
+    }
+
     return ImageReferenceGenerator.enqueue(() =>
       this.doGenerateForDirectory(workspaceRoot, directoryPath),
     );
@@ -312,19 +329,18 @@ export class ImageReferenceGenerator {
    * 移除指定图片路径的引用
    * @param imagePath 图片相对于项目根目录的路径
    */
-  static async doPruneMissingReferences(workspaceRoot: string): Promise<void> {
+  static async pruneMissingReferences(workspaceRoot: string): Promise<void> {
     return ImageReferenceGenerator.enqueue(() =>
-      this.doRemoveReference(workspaceRoot, undefined),
+      this.doRemoveReference(workspaceRoot),
     );
   }
 
   /**
    * 剔除类文件中所有指向已不存在图片的引用
-   * 存在性按变体判断：基准目录或其变体子目录下仍有同名同扩展名的文件，就认为该引用有效。
-   * 记录的路径是去掉变体目录后的基准路径，因此只有变体也存在时同样会被保留。
+   * 只检查主目录（非变体目录）下的文件是否存在，变体目录的文件不作为保留依据
    * @returns 清理后的内容，以及被剔除的方法名列表
    */
-  private static pruneMissingReferences(
+  private static doPruneMissingReferences(
     workspaceRoot: string,
     content: string,
   ): { content: string; removed: string[] } {
@@ -335,7 +351,8 @@ export class ImageReferenceGenerator {
       regex,
       (match, methodName: string, assetPath: string) => {
         const imagePath = path.join(workspaceRoot, assetPath);
-        if (!this.areAllVariantsDeleted(imagePath)) {
+        // 只检查主目录文件是否存在，不检查变体
+        if (fs.existsSync(imagePath)) {
           return match;
         }
         Logger.d(`剔除失效的图片引用: ${methodName} => ${assetPath}`);
@@ -347,58 +364,21 @@ export class ImageReferenceGenerator {
     return { content: pruned, removed };
   }
 
-  /**
-   * 移除指定图片路径的引用
-   * @param imagePath 图片相对于项目根目录的路径
-   */
-  static async removeReference(
-    workspaceRoot: string,
-    imagePath: string,
-  ): Promise<void> {
-    return ImageReferenceGenerator.enqueue(() =>
-      this.doRemoveReference(workspaceRoot, imagePath),
-    );
-  }
-
-  private static async doRemoveReference(
-    workspaceRoot: string,
-    imagePath: string | undefined,
-  ): Promise<void> {
+  private static async doRemoveReference(workspaceRoot: string): Promise<void> {
     try {
       const classPath = this.getImagesClassPath(workspaceRoot);
       if (!fs.existsSync(classPath)) {
         return;
       }
 
-      const methodName = imagePath
-        ? this.imageToMethodName(imagePath)
-        : undefined;
-      // 移除本次目标前，先剔除所有已失效的图片引用
-      const pruned = this.pruneMissingReferences(
+      const pruned = this.doPruneMissingReferences(
         workspaceRoot,
         this.readImagesClassContent(workspaceRoot),
       );
 
-      if (!methodName) {
-        if (pruned.removed.length > 0) {
-          await this.writeImagesClassContent(workspaceRoot, pruned.content);
-          Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
-        }
-        return;
-      }
-
-      const content = pruned.content;
-      // 匹配并删除对应的 getter 方法
-      const regex = getStaticGetMethodRegex(methodName);
-
-      const newContent = content.replace(regex, "");
-      // 目标可能在清理阶段已被剔除，因此两者任一有变化都要写回
-      if (newContent !== content || pruned.removed.length > 0) {
-        await this.writeImagesClassContent(workspaceRoot, newContent);
-        Logger.d(`已移除图片引用: ${methodName}`);
-        if (pruned.removed.length > 0) {
-          Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
-        }
+      if (pruned.removed.length > 0) {
+        await this.writeImagesClassContent(workspaceRoot, pruned.content);
+        Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
       }
     } catch (e) {
       Logger.e("移除图片引用失败", e);
@@ -413,6 +393,10 @@ export class ImageReferenceGenerator {
     workspaceRoot: string,
     directoryPath: string,
   ): Promise<void> {
+    if (this.isInVariantDir(workspaceRoot, directoryPath)) {
+      Logger.d(`跳过变体目录下的图片: ${directoryPath}`);
+      return;
+    }
     return ImageReferenceGenerator.enqueue(() =>
       this.doRegenerateForDirectory(workspaceRoot, directoryPath),
     );
@@ -473,6 +457,11 @@ export class ImageReferenceGenerator {
     workspaceRoot: string,
     imagePath: string,
   ): Promise<void> {
+    if (this.isInVariantDir(workspaceRoot, path.dirname(imagePath))) {
+      Logger.d(`跳过变体目录下的图片: ${imagePath}`);
+      return;
+    }
+
     return ImageReferenceGenerator.enqueue(() =>
       this.doGenerateForSingleImage(workspaceRoot, imagePath),
     );
@@ -486,11 +475,9 @@ export class ImageReferenceGenerator {
       // 确保 Images 类存在
       await this.ensureImagesClassExists(workspaceRoot);
 
-      // 计算相对于项目根目录的路径
-      const relativePath = path.relative(workspaceRoot, imagePath);
-
       // 读取现有内容
       let content = this.readImagesClassContent(workspaceRoot);
+      const relativePath = path.relative(workspaceRoot, imagePath);
       const methodName = this.imageToMethodName(relativePath);
 
       // 检查是否已存在
@@ -524,40 +511,5 @@ export class ImageReferenceGenerator {
     } catch (e) {
       Logger.e("生成单个图片引用失败", e);
     }
-  }
-
-  /**
-   * 检查指定图片的所有变体是否都已删除
-   * 图片身份包含扩展名，foo.png 与 foo.webp 互不影响
-   * @param deletedImagePath 已删除图片的绝对路径
-   * @returns 如果所有变体都已删除则返回 true
-   */
-  private static areAllVariantsDeleted(deletedImagePath: string): boolean {
-    return ImageVariantUtils.collectVariants(deletedImagePath).length === 0;
-  }
-
-  /**
-   * 移除图片引用（仅当所有变体都删除时才移除）
-   * @param deletedImagePath 已删除图片的绝对路径
-   */
-  static async removeReferenceIfAllVariantsDeleted(
-    workspaceRoot: string,
-    deletedImagePath: string,
-  ): Promise<void> {
-    return ImageReferenceGenerator.enqueue(async () => {
-      try {
-        // 检查是否所有变体都已删除
-        if (!this.areAllVariantsDeleted(deletedImagePath)) {
-          Logger.d("仍存在其他变体文件，保留图片引用");
-          return;
-        }
-
-        // 所有变体都已删除，移除引用
-        const relativePath = path.relative(workspaceRoot, deletedImagePath);
-        await this.doRemoveReference(workspaceRoot, relativePath);
-      } catch (e) {
-        Logger.e("检查变体删除状态失败", e);
-      }
-    });
   }
 }

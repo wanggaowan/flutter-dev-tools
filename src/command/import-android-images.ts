@@ -159,61 +159,61 @@ export class ImportAndroidImages implements vscode.Disposable {
     const tempDirsToDelete: string[] = [];
 
     try {
-      for (const selectedUri of selectedUris) {
-        const sourcePath = selectedUri.fsPath;
-        const stat = fs.statSync(sourcePath);
+      try {
+        for (const selectedUri of selectedUris) {
+          const sourcePath = selectedUri.fsPath;
+          const stat = fs.statSync(sourcePath);
 
-        // 检查是文件还是目录
-        if (stat.isFile()) {
-          // 处理压缩文件
-          if (sourcePath.toLowerCase().endsWith(".zip")) {
-            const tempDir = await this.extractZipFile(sourcePath);
-            if (tempDir) {
-              tempDirsToDelete.push(tempDir);
+          // 检查是文件还是目录
+          if (stat.isFile()) {
+            // 处理压缩文件
+            if (sourcePath.toLowerCase().endsWith(".zip")) {
+              const tempDir = await this.extractZipFile(sourcePath);
+              if (tempDir) {
+                tempDirsToDelete.push(tempDir);
 
-              // 在解压后的目录中查找密度目录
-              const subDensityDirs = this.findDensityDirectories(tempDir);
+                // 在解压后的目录中查找密度目录
+                const subDensityDirs = this.findDensityDirectories(tempDir);
+                if (subDensityDirs.length > 0) {
+                  densityDirsToProcess.push(...subDensityDirs);
+                }
+              }
+            }
+            // 忽略非 zip 文件
+          } else if (stat.isDirectory()) {
+            // 处理目录（原有逻辑）
+            const dirName = path.basename(sourcePath);
+
+            // 检查选中的目录本身是否是密度目录
+            if (dirName in DENSITY_MAP) {
+              // 直接选择了密度目录
+              densityDirsToProcess.push([dirName, sourcePath]);
+            } else {
+              // 选择的是父目录，查找其下的密度子目录
+              const subDensityDirs = this.findDensityDirectories(sourcePath);
               if (subDensityDirs.length > 0) {
                 densityDirsToProcess.push(...subDensityDirs);
               }
+              // 如果不是密度目录且没有密度子目录，则忽略（不报错）
             }
-          }
-          // 忽略非 zip 文件
-        } else if (stat.isDirectory()) {
-          // 处理目录（原有逻辑）
-          const dirName = path.basename(sourcePath);
-
-          // 检查选中的目录本身是否是密度目录
-          if (dirName in DENSITY_MAP) {
-            // 直接选择了密度目录
-            densityDirsToProcess.push([dirName, sourcePath]);
-          } else {
-            // 选择的是父目录，查找其下的密度子目录
-            const subDensityDirs = this.findDensityDirectories(sourcePath);
-            if (subDensityDirs.length > 0) {
-              densityDirsToProcess.push(...subDensityDirs);
-            }
-            // 如果不是密度目录且没有密度子目录，则忽略（不报错）
           }
         }
+      } catch (e) {
+        Logger.e("处理选择的文件时出错", e);
+        Logger.showNotification("处理文件失败", "error");
+        return;
       }
-    } catch (e) {
-      Logger.e("处理选择的文件时出错", e);
-      Logger.showNotification("处理文件失败", "error");
-      return;
-    }
 
-    if (densityDirsToProcess.length === 0) {
-      Logger.showNotification(
-        "未找到有效的 Android 密度目录（drawable-mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi 或 mipmap-mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi）",
-        "warn",
-      );
-      return;
-    }
+      if (densityDirsToProcess.length === 0) {
+        Logger.showNotification(
+          "未找到有效的 Android 密度目录（drawable-mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi 或 mipmap-mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi）",
+          "warn",
+        );
+        return;
+      }
 
-    // 收集所有待导入的图片信息（按文件名分组）
-    const pendingImageGroups: Map<string, PendingImageGroup> = new Map();
-    try {
+      // 收集所有待导入的图片信息（按文件名分组）
+      const pendingImageGroups: Map<string, PendingImageGroup> = new Map();
       for (const [dirName, dirPath] of densityDirsToProcess) {
         const variant = DENSITY_MAP[dirName];
         const imageType = dirName.startsWith("drawable")
@@ -226,8 +226,75 @@ export class ImportAndroidImages implements vscode.Disposable {
           pendingImageGroups,
         );
       }
+
+      if (pendingImageGroups.size === 0) {
+        Logger.showNotification("未找到可导入的图片", "warn");
+        return;
+      }
+
+      // 按类型分组：drawable 和 mipmap
+      const drawableGroups: PendingImageGroup[] = [];
+      const mipmapGroups: PendingImageGroup[] = [];
+      for (const group of pendingImageGroups.values()) {
+        if (group.type === "drawable") {
+          drawableGroups.push(group);
+        } else {
+          mipmapGroups.push(group);
+        }
+      }
+
+      // 生成预览用的 base64 数据，冲突检测的冲突图片展示也依赖此数据
+      await this.convertImagesToBase64(drawableGroups);
+      await this.convertImagesToBase64(mipmapGroups);
+
+      // 初始化冲突状态
+      this.refreshGroupConflicts(
+        [...drawableGroups, ...mipmapGroups],
+        selectedPath,
+      );
+
+      // 显示预览对话框，让用户确认和重命名
+      const confirmedGroups = await this.showPreviewDialog(
+        drawableGroups,
+        mipmapGroups,
+        selectedPath,
+      );
+      if (!confirmedGroups || confirmedGroups.length === 0) {
+        Logger.showNotification("已取消导入", "info");
+        return;
+      }
+
+      // 执行导入
+      let importedCount = 0;
+      try {
+        const writtenFiles = new Set<string>();
+        for (const group of confirmedGroups) {
+          const count = await this.copyImageGroup(
+            group,
+            selectedPath,
+            writtenFiles,
+          );
+          importedCount += count;
+        }
+
+        if (importedCount > 0) {
+          const relativePath = path.relative(
+            this.sdk.workspace.fsPath,
+            selectedPath,
+          );
+          Logger.showNotification(
+            `成功导入 ${importedCount} 个图片文件到 "${relativePath}"`,
+            "info",
+          );
+        } else {
+          Logger.showNotification("导入失败或文件已存在", "warn");
+        }
+      } catch (e) {
+        Logger.e("导入图片时出错", e);
+        Logger.showNotification("导入图片失败", "error");
+      }
     } finally {
-      // 清理临时解压目录
+      // 导入结束或取消后清理临时解压目录
       for (const tempDir of tempDirsToDelete) {
         try {
           if (fs.existsSync(tempDir)) {
@@ -237,73 +304,6 @@ export class ImportAndroidImages implements vscode.Disposable {
           Logger.e(`删除临时目录失败: ${tempDir}`, e);
         }
       }
-    }
-
-    if (pendingImageGroups.size === 0) {
-      Logger.showNotification("未找到可导入的图片", "warn");
-      return;
-    }
-
-    // 按类型分组：drawable 和 mipmap
-    const drawableGroups: PendingImageGroup[] = [];
-    const mipmapGroups: PendingImageGroup[] = [];
-    for (const group of pendingImageGroups.values()) {
-      if (group.type === "drawable") {
-        drawableGroups.push(group);
-      } else {
-        mipmapGroups.push(group);
-      }
-    }
-
-    // 生成预览用的 base64 数据，冲突检测的冲突图片展示也依赖此数据
-    await this.convertImagesToBase64(drawableGroups);
-    await this.convertImagesToBase64(mipmapGroups);
-
-    // 初始化冲突状态
-    this.refreshGroupConflicts(
-      [...drawableGroups, ...mipmapGroups],
-      selectedPath,
-    );
-
-    // 显示预览对话框，让用户确认和重命名
-    const confirmedGroups = await this.showPreviewDialog(
-      drawableGroups,
-      mipmapGroups,
-      selectedPath,
-    );
-    if (!confirmedGroups || confirmedGroups.length === 0) {
-      Logger.showNotification("已取消导入", "info");
-      return;
-    }
-
-    // 执行导入
-    let importedCount = 0;
-    try {
-      const writtenFiles = new Set<string>();
-      for (const group of confirmedGroups) {
-        const count = await this.copyImageGroup(
-          group,
-          selectedPath,
-          writtenFiles,
-        );
-        importedCount += count;
-      }
-
-      if (importedCount > 0) {
-        const relativePath = path.relative(
-          this.sdk.workspace.fsPath,
-          selectedPath,
-        );
-        Logger.showNotification(
-          `成功导入 ${importedCount} 个图片文件到 "${relativePath}"`,
-          "info",
-        );
-      } else {
-        Logger.showNotification("导入失败或文件已存在", "warn");
-      }
-    } catch (e) {
-      Logger.e("导入图片时出错", e);
-      Logger.showNotification("导入图片失败", "error");
     }
   }
 

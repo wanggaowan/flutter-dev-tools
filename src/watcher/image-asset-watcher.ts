@@ -168,7 +168,7 @@ export class ImageAssetWatcher implements vscode.Disposable {
     this.clearImageReferenceSetTimeoutId = setTimeout(async () => {
       try {
         Logger.d(`执行图片引用方法清理操作`);
-        await ImageReferenceGenerator.doPruneMissingReferences(
+        await ImageReferenceGenerator.pruneMissingReferences(
           this.workspaceRoot,
         );
       } catch (e) {
