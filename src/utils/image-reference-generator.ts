@@ -12,24 +12,39 @@ import { ForamtUtils } from "./format-utils";
  */
 export class ImageReferenceGenerator {
   /**
-   * 操作队列的尾部 Promise。
+   * 按工作区根目录隔离的操作队列尾部 Promise。
    * images.dart 的修改是「读取-变更-写回」过程，且写回是异步的（格式化 + save）；
    * 若并发执行，后一个任务可能读到前一个任务写入前的旧数据，导致更新丢失。
-   * 因此所有修改操作都通过该队列串行执行。
+   * 因此同一工作区的修改操作通过该队列串行执行；
+   * 不同工作区操作的是不同文件，无需互相等待，各自独立排队。
    */
-  private static opQueue: Promise<unknown> = Promise.resolve();
+  private static opQueues = new Map<string, Promise<unknown>>();
 
   /**
-   * 将修改任务排入队列，串行执行。
-   * 注意：入队的任务内部只能调用私有的 doXxx 方法，不能再调用公开的排队方法，否则会自我等待。
+   * 将修改任务排入指定工作区的队列，串行执行
+   * @param workspaceRoot 工作区根目录，作为队列的隔离键
+   * @param task 要执行的修改任务
    */
-  private static enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const result = ImageReferenceGenerator.opQueue.then(() => task());
+  private static enqueue<T>(
+    workspaceRoot: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = path.resolve(workspaceRoot);
+    const tail = this.opQueues.get(key) ?? Promise.resolve();
+    const result = tail.then(() => task());
     // 队列不能被单个失败任务中断
-    ImageReferenceGenerator.opQueue = result.then(
+    const next = result.then(
       () => undefined,
       () => undefined,
     );
+    this.opQueues.set(key, next);
+
+    // 队列空闲后释放，避免长期驻留已结束的 Promise
+    void next.then(() => {
+      if (this.opQueues.get(key) === next) {
+        this.opQueues.delete(key);
+      }
+    });
     return result;
   }
 
@@ -234,7 +249,7 @@ export class ImageReferenceGenerator {
   }
 
   /**
-   * 为指定目录下的所有图片生成引用
+   * 为指定目录下的所有图片生成引用(已存在则不处理，不存在添加，清空后重建)
    * @param directoryPath 目录绝对路径
    */
   static async generateForDirectory(
@@ -246,14 +261,15 @@ export class ImageReferenceGenerator {
       return;
     }
 
-    return ImageReferenceGenerator.enqueue(() =>
-      this.doGenerateForDirectory(workspaceRoot, directoryPath),
+    return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
+      this.doGenerateForDirectory(workspaceRoot, directoryPath, false),
     );
   }
 
   private static async doGenerateForDirectory(
     workspaceRoot: string,
     directoryPath: string,
+    clearNotExistData: boolean,
   ): Promise<void> {
     try {
       // 确保 Images 类存在
@@ -263,14 +279,20 @@ export class ImageReferenceGenerator {
       const imagePaths = this.collectImages(workspaceRoot, directoryPath);
 
       if (imagePaths.length === 0) {
-        Logger.d("未找到需要生成引用的图片");
+        Logger.d(`${path.basename(workspaceRoot)}:未找到需要生成引用的图片`);
         return;
       }
 
       // 读取现有内容
       let content = this.readImagesClassContent(workspaceRoot);
-      const className = this.getImagesClassName();
+      let deleteCount = 0;
+      if (clearNotExistData) {
+        const pruned = this.doPruneMissingReferences(workspaceRoot, content);
+        content = pruned.content;
+        deleteCount = pruned.removed.length;
+      }
 
+      const className = this.getImagesClassName();
       // 如果没有内容，初始化基本结构
       if (!content.trim()) {
         content = `class ${className} {
@@ -282,7 +304,9 @@ export class ImageReferenceGenerator {
       // 找出类定义的结束位置（最后一个 }）
       const lastBraceIndex = content.lastIndexOf("}");
       if (lastBraceIndex === -1) {
-        Logger.e("Images 类格式不正确，无法找到类定义结束位置");
+        Logger.e(
+          `${path.basename(workspaceRoot)}:Images 类格式不正确，无法找到类定义结束位置"`,
+        );
         return;
       }
 
@@ -308,8 +332,10 @@ export class ImageReferenceGenerator {
         addedCount++;
       }
 
-      if (addedCount === 0) {
-        Logger.d("所有图片引用已存在，无需更新");
+      if (addedCount === 0 && deleteCount == 0) {
+        Logger.d(
+          `${path.basename(workspaceRoot)}:所有图片引用已存在，无需更新`,
+        );
         return;
       }
 
@@ -319,9 +345,11 @@ export class ImageReferenceGenerator {
       // 写入文件
       await this.writeImagesClassContent(workspaceRoot, updatedContent);
 
-      Logger.d(`已为 ${addedCount} 个图片生成引用方法`);
+      Logger.d(
+        `${path.basename(workspaceRoot)}:已为 ${addedCount} 个图片生成引用方法, 已删除${deleteCount}个无效图片引用方法`,
+      );
     } catch (e) {
-      Logger.e("生成图片引用失败", e);
+      Logger.e(`${path.basename(workspaceRoot)}:生成图片引用失败`, e);
     }
   }
 
@@ -330,7 +358,7 @@ export class ImageReferenceGenerator {
    * @param imagePath 图片相对于项目根目录的路径
    */
   static async pruneMissingReferences(workspaceRoot: string): Promise<void> {
-    return ImageReferenceGenerator.enqueue(() =>
+    return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
       this.doRemoveReference(workspaceRoot),
     );
   }
@@ -378,10 +406,12 @@ export class ImageReferenceGenerator {
 
       if (pruned.removed.length > 0) {
         await this.writeImagesClassContent(workspaceRoot, pruned.content);
-        Logger.d(`已剔除 ${pruned.removed.length} 个失效的图片引用`);
+        Logger.d(
+          `${path.basename(workspaceRoot)}:已剔除 ${pruned.removed.length} 个失效的图片引用`,
+        );
       }
     } catch (e) {
-      Logger.e("移除图片引用失败", e);
+      Logger.e(`${path.basename(workspaceRoot)}:移除图片引用失败`, e);
     }
   }
 
@@ -397,7 +427,7 @@ export class ImageReferenceGenerator {
       Logger.d(`跳过变体目录下的图片: ${directoryPath}`);
       return;
     }
-    return ImageReferenceGenerator.enqueue(() =>
+    return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
       this.doRegenerateForDirectory(workspaceRoot, directoryPath),
     );
   }
@@ -407,17 +437,22 @@ export class ImageReferenceGenerator {
     directoryPath: string,
   ): Promise<void> {
     try {
-      const classPath = this.getImagesClassPath(workspaceRoot);
-      if (!fs.existsSync(classPath)) {
-        await this.doGenerateForDirectory(workspaceRoot, directoryPath);
-        return;
-      }
+      // 确保 Images 类存在
+      await this.ensureImagesClassExists(workspaceRoot);
 
       // 收集当前目录下的所有图片
       const imagePaths = this.collectImages(workspaceRoot, directoryPath);
 
       // 读取现有内容
       let content = this.readImagesClassContent(workspaceRoot);
+      // 如果没有内容，初始化基本结构
+      if (!content.trim()) {
+        const className = this.getImagesClassName();
+        content = `class ${className} {
+  ${className}._inner();
+}
+`;
+      }
 
       // 保留类定义结构，移除所有 getter 方法
       const regex =
@@ -427,7 +462,7 @@ export class ImageReferenceGenerator {
       // 找出类定义的结束位置
       const lastBraceIndex = cleanedContent.lastIndexOf("}");
       if (lastBraceIndex === -1) {
-        Logger.e("Images 类格式不正确");
+        Logger.e(`${path.basename(workspaceRoot)}:Images 类格式不正确`);
         return;
       }
 
@@ -443,9 +478,11 @@ export class ImageReferenceGenerator {
       const updatedContent = beforeContent + newMethods + afterContent;
       await this.writeImagesClassContent(workspaceRoot, updatedContent);
 
-      Logger.d(`已重新生成 ${imagePaths.length} 个图片引用`);
+      Logger.d(
+        `${path.basename(workspaceRoot)}:已重新生成 ${imagePaths.length} 个图片引用`,
+      );
     } catch (e) {
-      Logger.e("重新生成图片引用失败", e);
+      Logger.e(`${path.basename(workspaceRoot)}:重新生成图片引用失败`, e);
     }
   }
 
@@ -462,7 +499,7 @@ export class ImageReferenceGenerator {
       return;
     }
 
-    return ImageReferenceGenerator.enqueue(() =>
+    return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
       this.doGenerateForSingleImage(workspaceRoot, imagePath),
     );
   }
@@ -482,14 +519,18 @@ export class ImageReferenceGenerator {
 
       // 检查是否已存在
       if (this.methodExists(content, methodName)) {
-        Logger.d(`图片引用已存在: ${methodName}`);
+        Logger.d(
+          `${path.basename(workspaceRoot)}:图片引用已存在: ${methodName}`,
+        );
         return;
       }
 
       // 找出类定义的结束位置
       const lastBraceIndex = content.lastIndexOf("}");
       if (lastBraceIndex === -1) {
-        Logger.e("Images 类格式不正确，无法找到类定义结束位置");
+        Logger.e(
+          `${path.basename(workspaceRoot)}:Images 类格式不正确，无法找到类定义结束位置`,
+        );
         return;
       }
 
@@ -507,9 +548,30 @@ export class ImageReferenceGenerator {
       // 写入文件
       await this.writeImagesClassContent(workspaceRoot, updatedContent);
 
-      Logger.d(`已为图片生成引用: ${methodName}`);
+      Logger.d(
+        `${path.basename(workspaceRoot)}:已为图片生成引用: ${methodName}`,
+      );
     } catch (e) {
-      Logger.e("生成单个图片引用失败", e);
+      Logger.e(`${path.basename(workspaceRoot)}:生成单个图片引用失败`, e);
     }
+  }
+
+  /**
+   * 为图片资源目录生成引用方法(已存在则不处理，不存在添加，清空后重建)
+   * 递归遍历 imageSrcPath 下所有层级的子目录，剔除磁盘上已不存在的条目、补齐缺失的条目
+   * @param workspaceRoot 工作区根目录
+   * @param imageSrcPath 图片源目录（相对于项目根目录）
+   */
+  static async syncAssetDirectories(
+    workspaceRoot: string,
+    imageSrcPath: string,
+  ): Promise<void> {
+    return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
+      this.doGenerateForDirectory(
+        workspaceRoot,
+        path.join(workspaceRoot, imageSrcPath),
+        true,
+      ),
+    );
   }
 }

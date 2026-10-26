@@ -11,23 +11,39 @@ export class PubspecUtils {
   private constructor() {}
 
   /**
-   * 操作队列的尾部 Promise。
+   * 按工作区根目录隔离的操作队列尾部 Promise。
    * pubspec 的修改是「读取-变更-写回」过程，且写回是异步的；
    * 若并发执行，后一个任务可能读到前一个任务写入前的旧数据，导致更新丢失。
-   * 因此所有修改操作都通过该队列串行执行。
+   * 因此同一工作区的修改操作通过该队列串行执行；
+   * 不同工作区操作的是不同文件，无需互相等待，各自独立排队。
    */
-  private static opQueue: Promise<unknown> = Promise.resolve();
+  private static opQueues = new Map<string, Promise<unknown>>();
 
   /**
-   * 将修改任务排入队列，串行执行
+   * 将修改任务排入指定工作区的队列，串行执行
+   * @param workspaceRoot 工作区根目录，作为队列的隔离键
+   * @param task 要执行的修改任务
    */
-  private static enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const result = this.opQueue.then(() => task());
+  private static enqueue<T>(
+    workspaceRoot: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = path.resolve(workspaceRoot);
+    const tail = this.opQueues.get(key) ?? Promise.resolve();
+    const result = tail.then(() => task());
     // 队列不能被单个失败任务中断
-    this.opQueue = result.then(
+    const next = result.then(
       () => undefined,
       () => undefined,
     );
+    this.opQueues.set(key, next);
+
+    // 队列空闲后释放，避免长期驻留已结束的 Promise
+    void next.then(() => {
+      if (this.opQueues.get(key) === next) {
+        this.opQueues.delete(key);
+      }
+    });
     return result;
   }
 
@@ -258,7 +274,9 @@ export class PubspecUtils {
       if (fs.existsSync(path.join(workspaceRoot, normalized))) {
         return true;
       }
-      Logger.d(`清理已失效的资源目录: ${entry}`);
+      Logger.d(
+        `${path.basename(workspaceRoot)}:清理已失效的资源目录: ${entry}`,
+      );
       return false;
     });
 
@@ -275,13 +293,15 @@ export class PubspecUtils {
     workspaceRoot: string,
     directoryPath: string,
   ): Promise<boolean> {
-    return this.enqueue(async () => {
+    return this.enqueue(workspaceRoot, async () => {
       const pubspecPath = this.getPubspecPath(workspaceRoot);
       const pubspec = this.readPubspec(pubspecPath);
 
       const assets = this.getAssets(pubspec);
       const relativePath = path.relative(workspaceRoot, directoryPath);
-      const actualSubdirs: string[] = [`${relativePath.split(path.sep).join("/")}/`];
+      const actualSubdirs: string[] = [
+        `${relativePath.split(path.sep).join("/")}/`,
+      ];
       // 递归收集 directoryPath 下的所有层级子目录
       if (fs.existsSync(directoryPath)) {
         this.collectSubDirectories(workspaceRoot, directoryPath, actualSubdirs);
@@ -293,7 +313,7 @@ export class PubspecUtils {
       // 添加新目录
       for (const dir of toAdd) {
         assets.push(dir);
-        Logger.d(`将添加资源目录: ${dir}`);
+        Logger.d(`${path.basename(workspaceRoot)}:将添加资源目录: ${dir}`);
         changed = true;
       }
 
@@ -301,9 +321,10 @@ export class PubspecUtils {
         return false;
       }
 
-      // 排序以保持有序
       this.writePubspecAssetsOnly(pubspecPath, assets);
-      Logger.d(`已添加资源目录到 pubspec.yaml: ${toAdd.join("、")}`);
+      Logger.d(
+        `${path.basename(workspaceRoot)}:已添加资源目录到 pubspec.yaml: ${toAdd.join("、")}`,
+      );
       return true;
     });
   }
@@ -313,10 +334,8 @@ export class PubspecUtils {
    * @param workspaceRoot 工作区根目录
    * @returns 是否发生了改变
    */
-  static async removeAssetDirectory(
-    workspaceRoot: string,
-  ): Promise<boolean> {
-    return this.enqueue(async () => {
+  static async removeAssetDirectory(workspaceRoot: string): Promise<boolean> {
+    return this.enqueue(workspaceRoot, async () => {
       const pubspecPath = this.getPubspecPath(workspaceRoot);
       const pubspec = this.readPubspec(pubspecPath);
 
@@ -332,7 +351,7 @@ export class PubspecUtils {
 
       // this.setAssets(pubspec, assets);
       this.writePubspecAssetsOnly(pubspecPath, assets);
-      Logger.d(`已从 pubspec.yaml 移除无效资源目录`);
+      Logger.d(`${path.basename(workspaceRoot)}:已从 pubspec.yaml 移除无效资源目录`);
       return true;
     });
   }
@@ -360,7 +379,7 @@ export class PubspecUtils {
       }
       const childPath = path.join(directoryPath, entry.name);
       out.push(
-       `${ path.relative(workspaceRoot, childPath).split(path.sep).join("/")}/`,
+        `${path.relative(workspaceRoot, childPath).split(path.sep).join("/")}/`,
       );
       this.collectSubDirectories(workspaceRoot, childPath, out);
     }
@@ -376,7 +395,7 @@ export class PubspecUtils {
     workspaceRoot: string,
     imageSrcPath: string,
   ): Promise<void> {
-    return this.enqueue(async () => {
+    return this.enqueue(workspaceRoot, async () => {
       const pubspecPath = this.getPubspecPath(workspaceRoot);
       const pubspec = this.readPubspec(pubspecPath);
 
@@ -402,16 +421,16 @@ export class PubspecUtils {
       // 添加新目录
       for (const dir of toAdd) {
         assets.push(dir);
-        Logger.d(`将添加资源目录: ${dir}`);
+        Logger.d(`${path.basename(workspaceRoot)}:将添加资源目录: ${dir}`);
         changed = true;
       }
 
       if (changed) {
         // 排序
         this.writePubspecAssetsOnly(pubspecPath, assets);
-        Logger.d("pubspec.yaml assets 已同步");
+        Logger.d(`${path.basename(workspaceRoot)}:pubspec.yaml assets 已同步`);
       } else {
-        Logger.d("pubspec.yaml assets 已是最新状态");
+        Logger.d(`${path.basename(workspaceRoot)}:pubspec.yaml assets 已是最新状态`);
       }
     });
   }

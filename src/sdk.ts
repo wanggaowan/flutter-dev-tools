@@ -1,23 +1,46 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 import { importRegex, partRegex } from "./utils/regexp-utils";
+import { dir } from "console";
 
 export class FlutterSdk {
   readonly dartSdk: DartSdk | undefined;
+  readonly modules: FlutterModule[];
 
   constructor(
     readonly context: vscode.ExtensionContext,
     readonly workspace: vscode.Uri,
-    readonly example?: vscode.Uri
   ) {
     let dartExt = vscode.extensions.getExtension("Dart-Code.dart-code");
     if (dartExt) {
       this.dartSdk = new DartSdk(dartExt);
     }
+
+    const modules: FlutterModule[] = [];
+    var dirs = fs.readdirSync(workspace.fsPath);
+    for (const element of dirs) {
+      let exist = fs.existsSync(
+        vscode.Uri.joinPath(workspace, element, "pubspec.yaml").fsPath,
+      );
+      if (exist) {
+        modules.push(
+          new FlutterModule(context, vscode.Uri.joinPath(workspace, element)),
+        );
+      }
+    }
+    this.modules = modules;
   }
 
-  deactivate() {
-    
-  }
+  deactivate() {}
+}
+
+export class FlutterModule {
+  constructor(
+    readonly context: vscode.ExtensionContext,
+    readonly workspace: vscode.Uri,
+  ) {}
+
+  deactivate() {}
 }
 
 export class DartSdk {
@@ -29,7 +52,7 @@ export class DartSdk {
 
   public async getOutline(
     document: vscode.TextDocument,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
   ): Promise<PublicOutline | undefined> {
     if (this.version < 2) {
       throw Error("please upgrade dart plugin version >= 3.115.20250715");
@@ -57,7 +80,7 @@ export class DartSdk {
 
     return new vscode.Range(
       document.positionAt(lastIndexStart),
-      document.positionAt(lastIndexEnd)
+      document.positionAt(lastIndexEnd),
     );
   }
 
@@ -80,10 +103,9 @@ export class DartSdk {
 
     return new vscode.Range(
       document.positionAt(lastIndexStart),
-      document.positionAt(lastIndexEnd)
+      document.positionAt(lastIndexEnd),
     );
   }
-
 }
 
 export interface PublicOutline {

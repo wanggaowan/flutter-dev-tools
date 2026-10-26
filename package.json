@@ -117,6 +117,10 @@
       {
         "command": "flutterDevTools.renameImageWithVariants",
         "title": "重命名图片及所有变体"
+      },
+      {
+        "command": "flutterDevTools.genImagesRes",
+        "title": "生成图片资源引用文件并配置yaml assets 节点"
       }
     ],
     "submenus": [
@@ -202,6 +206,10 @@
         {
           "command": "flutterDevTools.renameImageWithVariants",
           "when": "false"
+        },
+        {
+          "command": "flutterDevTools.genImagesRes",
+          "when": "flutterDevTools.isFlutterProject"
         }
       ],
       "explorer/context": [

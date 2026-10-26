@@ -42,7 +42,7 @@ export function getSdk(): FlutterSdk | undefined {
 // Your extension is activated the very first time the command is executed
 export async function activate(
   context: vscode.ExtensionContext,
-  isRestart = false
+  isRestart = false,
 ) {
   Logger.i(isRestart ? "插件重新激活" : "插件已激活");
   // 注册项目目录变更监听
@@ -51,7 +51,7 @@ export async function activate(
       await deactivate(true);
       disposeAll(context.subscriptions);
       await activate(context, true);
-    })
+    }),
   );
 
   context.subscriptions.push(
@@ -65,9 +65,9 @@ export async function activate(
       //   "workbench.files.action.collapseExplorerFolders"
       // );
       await vscode.commands.executeCommand(
-        "workbench.files.action.showActiveFileInExplorer"
+        "workbench.files.action.showActiveFileInExplorer",
       );
-    })
+    }),
   );
 
   const rootPath =
@@ -81,19 +81,14 @@ export async function activate(
   }
 
   let exist = fs.existsSync(
-    vscode.Uri.joinPath(rootPath, "pubspec.yaml").fsPath
+    vscode.Uri.joinPath(rootPath, "pubspec.yaml").fsPath,
   );
 
   if (!exist) {
     return;
   }
 
-  let example: vscode.Uri | undefined;
-  let exapmlePath = vscode.Uri.joinPath(rootPath, "example", "pubspec.yaml");
-  if (fs.existsSync(exapmlePath.fsPath)) {
-    example = vscode.Uri.joinPath(rootPath, "example");
-  }
-  _sdk = new FlutterSdk(context, rootPath, example);
+  _sdk = new FlutterSdk(context, rootPath);
   setContext(IS_FLUTTER_PROJECT, true);
   registerImagePreviewView(_sdk);
 
@@ -144,21 +139,12 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   // 启动图片资源目录监听器
-  _imageAssetWatcher = new ImageAssetWatcher(rootPath.fsPath);
+  _imageAssetWatcher = new ImageAssetWatcher(_sdk);
   context.subscriptions.push(_imageAssetWatcher);
 
   // 启动 l10n arb 文件监听器
-  _l10nArbWatcher = new L10nArbWatcher(rootPath.fsPath);
+  _l10nArbWatcher = new L10nArbWatcher(_sdk);
   context.subscriptions.push(_l10nArbWatcher);
-
-  // 监听配置变更，重新初始化监听器
-  const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async e => {
-    if (e.affectsConfiguration("flutterDevTools.imageSrcPath")) {
-      Logger.d("检测到 imageSrcPath 配置变更，重新初始化监听器");
-      await _imageAssetWatcher?.reinitialize();
-    }
-  });
-  context.subscriptions.push(configChangeDisposable);
 }
 
 export async function deactivate(isRestart = false) {
@@ -187,11 +173,11 @@ export async function deactivate(isRestart = false) {
 
 // 注册图片预览视图
 function registerImagePreviewView(sdk: FlutterSdk) {
-  const rootPath =
-    vscode.workspace.workspaceFolders &&
-    vscode.workspace.workspaceFolders.length > 0
-      ? vscode.workspace.workspaceFolders[0].uri
-      : undefined;
+  // const rootPath =
+  //   vscode.workspace.workspaceFolders &&
+  //   vscode.workspace.workspaceFolders.length > 0
+  //     ? vscode.workspace.workspaceFolders[0].uri
+  //     : undefined;
   let provider = new ImagePreviewProvider(sdk);
   let treeView = vscode.window.registerWebviewViewProvider(
     IMAGE_PREVIEW_VIEW_ID,
@@ -200,7 +186,7 @@ function registerImagePreviewView(sdk: FlutterSdk) {
       webviewOptions: {
         retainContextWhenHidden: true,
       },
-    }
+    },
   );
   sdk.context.subscriptions.push(treeView);
 }
