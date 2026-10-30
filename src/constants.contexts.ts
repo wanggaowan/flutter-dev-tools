@@ -25,3 +25,4 @@ export const COMMAND_IMPORT_ANDROID_IMAGES = `flutterDevTools.importAndroidImage
 export const COMMAND_DELETE_IMAGE_WITH_VARIANTS = `flutterDevTools.deleteImageWithVariants`;
 export const COMMAND_RENAME_IMAGE_WITH_VARIANTS = `flutterDevTools.renameImageWithVariants`;
 export const COMMAND_GEN_IMAGES_RES = `flutterDevTools.genImagesRes`;
+export const COMMAND_CREATE_FILE_TEMPLATE = `flutterDevTools.createFileTemplate`;

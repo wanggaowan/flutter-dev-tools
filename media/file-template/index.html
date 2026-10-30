@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src 'nonce-{{nonce}}'; img-src {{cspSource}} data:;">
+  <link rel="stylesheet" href="{{styleUri}}">
+  <title>创建模板文件</title>
+</head>
+<body>
+  <!--INIT_DATA-->
+  <div class="app">
+    <aside class="column template-column">
+      <div class="column-header">模板</div>
+      <div class="template-list" id="template-list"></div>
+      <div class="toolbar">
+        <button id="import-btn">导入</button>
+        <button id="export-btn">导出</button>
+        <button id="export-all-btn">导出全部</button>
+        <span class="spacer"></span>
+        <button id="add-template-btn" class="icon-btn" title="新增模板">+</button>
+      </div>
+    </aside>
+
+    <section class="column children-column">
+      <div class="column-header">文件结构</div>
+      <div class="tree" id="tree"></div>
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <button id="add-child-btn" class="icon-btn" title="新增文件或目录" disabled>+</button>
+      </div>
+    </section>
+
+    <section class="column editor-column">
+      <div class="column-header" id="editor-title">内容</div>
+      <div class="editor-wrap">
+        <div class="editor-body">
+          <div class="editor-gutter" id="line-numbers"></div>
+          <div class="editor-code" id="editor-code">
+            <pre class="editor-highlight" id="highlight-layer" aria-hidden="true"><code id="highlight-code"></code></pre>
+            <textarea id="content-editor" spellcheck="false" wrap="off" disabled></textarea>
+          </div>
+        </div>
+        <div class="editor-empty" id="editor-empty">在左侧选择文件以编辑内容</div>
+      </div>
+      <div class="toolbar">
+        <button id="placeholder-desc-btn">特殊占位符说明</button>
+        <span class="spacer"></span>
+        <button id="apply-btn" disabled>应用</button>
+      </div>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-info">
+      <span class="target-dir" id="target-dir"></span>
+      <label class="copy-option">
+        <input type="checkbox" id="create-copy">
+        <span>同名文件存在时创建副本</span>
+      </label>
+    </div>
+    <div class="footer-actions">
+      <button id="cancel-btn">取消</button>
+      <button id="create-btn" class="primary">创建</button>
+    </div>
+  </footer>
+
+  <div class="context-menu" id="context-menu"></div>
+  <div class="modal-mask" id="modal-mask"></div>
+  <div class="toast" id="toast"></div>
+
+  <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>

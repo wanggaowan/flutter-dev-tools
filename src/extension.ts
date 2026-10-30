@@ -29,6 +29,7 @@ import { DeleteImageWithVariants } from "./command/delete-image-variants";
 import { RenameImageWithVariants } from "./command/rename-image-variants";
 import { ImageAssetWatcher } from "./watcher/image-asset-watcher";
 import { L10nArbWatcher } from "./watcher/l10n-arb-watcher";
+import { CreateFileTemplate } from "./command/file-template/create-file-template";
 
 let _sdk: FlutterSdk | undefined;
 let _imageAssetWatcher: ImageAssetWatcher | undefined;
@@ -136,6 +137,9 @@ export async function activate(
   context.subscriptions.push(disposable);
 
   disposable = new RenameImageWithVariants(_sdk);
+  context.subscriptions.push(disposable);
+
+  disposable = new CreateFileTemplate(_sdk);
   context.subscriptions.push(disposable);
 
   // 启动图片资源目录监听器

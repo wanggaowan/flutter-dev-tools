@@ -3,7 +3,7 @@
   "displayName": "FlutterDevTools",
   "description": "flutter开发工具集",
   "publisher": "wanggaowan",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -121,6 +121,11 @@
       {
         "command": "flutterDevTools.genImagesRes",
         "title": "生成图片资源引用文件并配置yaml assets 节点"
+      },
+      {
+        "command": "flutterDevTools.createFileTemplate",
+        "title": "创建模板文件",
+        "icon": "$(new-file)"
       }
     ],
     "submenus": [
@@ -210,35 +215,43 @@
         {
           "command": "flutterDevTools.genImagesRes",
           "when": "flutterDevTools.isFlutterProject"
+        },
+        {
+          "command": "flutterDevTools.createFileTemplate",
+          "when": "false"
         }
       ],
       "explorer/context": [
         {
           "submenu": "flutterDevTools.explorerContext",
           "when": "flutterDevTools.isFlutterProject",
-          "group": "navigation"
+          "group": "2_files"
         }
       ],
       "flutterDevTools.explorerContext": [
         {
+          "command": "flutterDevTools.createFileTemplate",
+          "group": "a"
+        },
+        {
           "command": "flutterDevTools.translateArb",
           "when": "resourceExtname == .arb",
-          "group": "a"
+          "group": "b"
         },
         {
           "command": "flutterDevTools.importAndroidImages",
           "when": "explorerResourceIsFolder",
-          "group": "a@1"
+          "group": "b@1"
         },
         {
           "command": "flutterDevTools.deleteImageWithVariants",
           "when": "resourceExtname == .png || resourceExtname == .jpg || resourceExtname == .jpeg || resourceExtname == .webp || resourceExtname == .gif || resourceExtname == .svg || resourceExtname == .bmp",
-          "group": "a@2"
+          "group": "b@2"
         },
         {
           "command": "flutterDevTools.renameImageWithVariants",
           "when": "resourceExtname == .png || resourceExtname == .jpg || resourceExtname == .jpeg || resourceExtname == .webp || resourceExtname == .gif || resourceExtname == .svg || resourceExtname == .bmp",
-          "group": "a@3"
+          "group": "b@3"
         },
         {
           "command": "flutter.task.genl10n",
