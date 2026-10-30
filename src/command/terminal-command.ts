@@ -110,7 +110,7 @@ export class TerminalCommand {
         title: "生成图片资源引用文件并配置yaml assets 节点",
       },
       async (progress, token) => {
-        const totalCount = sdk.modules.length + 1;
+        const totalCount = sdk.modules.length;
         let current = 1;
         if (totalCount == 1) {
           progress.report({ message: `Generating...` });
@@ -119,17 +119,7 @@ export class TerminalCommand {
             message: `Generating... ${current}/${totalCount}`,
           });
         }
-        await PubspecUtils.syncAssetDirectories(
-          sdk.workspace.fsPath,
-          imageSrcPath,
-        );
-        await ImageReferenceGenerator.syncAssetDirectories(
-          sdk.workspace.fsPath,
-          imageSrcPath,
-        );
-
         for (const element of sdk.modules) {
-          current++;
           progress.report({
             message: `Generating... ${current}/${totalCount}`,
           });
@@ -143,6 +133,7 @@ export class TerminalCommand {
             element.workspace.fsPath,
             imageSrcPath,
           );
+          current++;
         }
       },
     );

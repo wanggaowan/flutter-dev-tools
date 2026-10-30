@@ -385,20 +385,27 @@
           "flutterDevTools.imageSrcPath": {
             "type": "string",
             "default": "assets/images",
-            "description": "存放图片资源的目录,此目录为基于当前项目根目录的相对目录",
-            "scope": "window"
+            "description": "存放图片资源的目录，此目录为基于项目根目录的相对目录",
+            "scope": "window",
+            "order": 0,
+            "pattern": "^[^/\\\\*?\"<>|]+(\\/[^/\\\\*?\"<>|.]+)*$",
+            "errorMessage": "目录路径不能以 / 结尾，不能包含文件扩展名，也不能含有 \\:*?\"<>| 等非法字符"
           },
           "flutterDevTools.imagesFilePath": {
             "type": "string",
             "default": "lib/resources/images.dart",
-            "description": "生成图片引用类文件所在路径。此目录为基于当前项目根目录的相对目录",
-            "scope": "window"
+            "description": "生成图片引用方法类文件所在路径，此目录为基于项目根目录的相对目录",
+            "scope": "window",
+            "order": 1,
+            "pattern": "^[^/\\\\*?\"<>|]+(\\/[^/\\\\*?\"<>|]+)*\\/[^/\\\\]+\\.dart$",
+            "errorMessage": "必须是 .dart 文件路径，且不能含有 \\:*?\"<>| 等非法字符"
           },
           "flutterDevTools.imagesClassName": {
             "type": "string",
             "default": "Images",
-            "description": "生成图片引用类文件中class的名称，只要图片引用都是基于此类名称",
-            "scope": "window"
+            "description": "生成图片引用方法所在类Class的名称",
+            "scope": "window",
+            "order": 2
           }
         }
       },
@@ -409,7 +416,8 @@
             "type": "string",
             "default": "",
             "description": "生成序列化方法时，@JsonSerializable(converters: convertersName)中converters名称",
-            "scope": "window"
+            "scope": "window",
+            "order": 0
           }
         }
       },
@@ -420,25 +428,29 @@
             "type": "string",
             "default": "Entity",
             "description": "生成的类后缀",
-            "scope": "window"
+            "scope": "window",
+            "order": 0
           },
           "flutterDevTools.genDoc": {
             "type": "boolean",
             "default": true,
             "description": "json值是否作为备注",
-            "scope": "window"
+            "scope": "window",
+            "order": 1
           },
           "flutterDevTools.genConstructor": {
             "type": "boolean",
             "default": true,
             "description": "是否生成构造函数",
-            "scope": "window"
+            "scope": "window",
+            "order": 2
           },
           "flutterDevTools.genSerialization": {
             "type": "boolean",
             "default": true,
             "description": "是否生成序列化方法",
-            "scope": "window"
+            "scope": "window",
+            "order": 3
           }
         }
       },
@@ -449,32 +461,37 @@
             "type": "string",
             "default": "",
             "description": "阿里翻译AK",
-            "scope": "window"
+            "scope": "window",
+            "order": 0
           },
           "flutterDevTools.aliSk": {
             "type": "string",
             "default": "",
             "description": "阿里翻译SK",
-            "scope": "window"
+            "scope": "window",
+            "order": 1
           },
           "flutterDevTools.showRenameDialog": {
             "type": "boolean",
             "default": true,
             "description": "提取多语言时，是否展示重命名弹窗",
-            "scope": "window"
+            "scope": "window",
+            "order": 2
           },
           "flutterDevTools.showL10nText": {
             "type": "boolean",
             "default": true,
             "description": "是否在代码中展示多语言真实文本",
-            "scope": "window"
+            "scope": "window",
+            "order": 3
           },
           "flutterDevTools.showL10nTextMaxLength": {
             "type": "number",
             "default": 20,
             "minimum": 0,
             "description": "在代码中展示多语言真实文本最大长度，超出则省略(0代表无限制)",
-            "scope": "window"
+            "scope": "window",
+            "order": 4
           }
         }
       }

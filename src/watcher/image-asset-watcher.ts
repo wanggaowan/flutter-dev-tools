@@ -7,6 +7,8 @@ import Logger from "../utils/logger";
 import { isImage } from "../utils/utils";
 import { FlutterSdk } from "../sdk";
 
+const _tag = "ImageAssetWatcher";
+
 /**
  * 监听 imageSrcPath 目录下的子目录变化，并自动更新 pubspec.yaml
  */
@@ -52,9 +54,6 @@ export class ImageAssetWatcher implements vscode.Disposable {
       return;
     }
 
-    this.imageAssetWatchers.push(
-      new ImageAssetWatcherWrapper(this.sdk.workspace, imageSrcPath),
-    );
     this.sdk.modules.forEach(item => {
       this.imageAssetWatchers.push(
         new ImageAssetWatcherWrapper(item.workspace, imageSrcPath),
@@ -103,14 +102,13 @@ export class ImageAssetWatcher implements vscode.Disposable {
       item.dispose();
     });
     this.imageAssetWatchers = [];
-    Logger.d("图片资源目录监听器已停止");
   }
 }
 
 export class ImageAssetWatcherWrapper implements vscode.Disposable {
   readonly workspaceRoot: vscode.Uri;
   readonly imageSrcPath: string;
-  private _tag: string;
+  private _moduleName: string;
 
   private watcher: vscode.FileSystemWatcher | undefined;
   private clearDirectoryDeletedSetTimeoutId: any;
@@ -119,7 +117,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   constructor(workspaceRoot: vscode.Uri, imageSrcPath: string) {
     this.workspaceRoot = workspaceRoot;
     this.imageSrcPath = imageSrcPath;
-    this._tag = path.basename(this.workspaceRoot.fsPath);
+    this._moduleName = path.basename(this.workspaceRoot.fsPath);
     this.setupWatcher();
   }
 
@@ -147,7 +145,9 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
       this.handleFileDeleted(uri);
     });
 
-    Logger.d(`${this._tag}-已启动图片资源目录监听器: ${this.imageSrcPath}`);
+    Logger.d(
+      `${this._moduleName}-${_tag}-已启动图片资源目录监听器: ${this.imageSrcPath}`,
+    );
   }
 
   /**
@@ -174,7 +174,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
             this.workspaceRoot.fsPath,
             uri.fsPath,
           );
-          Logger.d(`${this._tag}-检测到新图片: ${relativePath}`);
+          Logger.d(`${this._moduleName}-${_tag}-检测到新图片: ${relativePath}`);
           // 这一步是为了目录创建时不是在vscode中，因此此处进行补救
           this.handleDirectoryCreated(
             vscode.Uri.file(path.dirname(uri.fsPath)),
@@ -183,7 +183,10 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
         }
       }
     } catch (e) {
-      Logger.e(`${this._tag}-处理文件创建事件失败: ${uri.fsPath}`, e);
+      Logger.e(
+        `${this._moduleName}-${_tag}-处理文件创建事件失败: ${uri.fsPath}`,
+        e,
+      );
     }
   }
 
@@ -221,7 +224,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
         this.clearImageReference();
       }
     } catch (e) {
-      Logger.e(`${this._tag}-处理文件删除事件失败: ${uri.fsPath}`, e);
+      Logger.e(`${_tag}-}-处理文件删除事件失败: ${uri.fsPath}`, e);
     }
   }
 
@@ -235,7 +238,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
         imagePath,
       );
     } catch (e) {
-      Logger.e(`${this._tag}:生成图片引用失败`, e);
+      Logger.e(`${this._moduleName}-${_tag}:生成图片引用失败`, e);
     }
   }
 
@@ -249,7 +252,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
         dirPath,
       );
     } catch (e) {
-      Logger.e(`${this._tag}:生成图片引用失败`, e);
+      Logger.e(`${this._moduleName}-${_tag}:生成图片引用失败`, e);
     }
   }
 
@@ -258,16 +261,18 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
    * 200ms 内多次调用只执行最后一次
    */
   private clearImageReference() {
-    Logger.d(`${this._tag}:检测到图片删除`);
+    Logger.d(`${this._moduleName}-${_tag}:检测到图片删除`);
     // 取消之前的定时器
     if (this.clearImageReferenceSetTimeoutId) {
-      Logger.d(`${this._tag}:图片删除，图片引用方法清理操作被取消`);
+      Logger.d(
+        `${this._moduleName}-${_tag}:图片删除，图片引用方法清理操作被取消`,
+      );
       clearTimeout(this.clearImageReferenceSetTimeoutId);
     }
 
     this.clearImageReferenceSetTimeoutId = setTimeout(async () => {
       try {
-        Logger.d(`${this._tag}:执行图片引用方法清理操作`);
+        Logger.d(`${this._moduleName}-${_tag}:执行图片引用方法清理操作`);
         await ImageReferenceGenerator.pruneMissingReferences(
           this.workspaceRoot.fsPath,
         );
@@ -285,7 +290,9 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   private async handleDirectoryCreated(uri: vscode.Uri): Promise<void> {
     try {
       const relativePath = path.relative(this.workspaceRoot.fsPath, uri.fsPath);
-      Logger.d(`${this._tag}-检测到新目录/目录下文件变更: ${relativePath}`);
+      Logger.d(
+        `${this._moduleName}-${_tag}-检测到新目录/目录下文件变更: ${relativePath}`,
+      );
 
       // 添加到 pubspec.yaml
       const changed = await PubspecUtils.ensureAssetDirectory(
@@ -294,10 +301,15 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
       );
 
       if (changed) {
-        Logger.d(`${this._tag}-已将新目录添加到 pubspec.yaml: ${relativePath}`);
+        Logger.d(
+          `${this._moduleName}-${_tag}-已将新目录添加到 pubspec.yaml: ${relativePath}`,
+        );
       }
     } catch (e) {
-      Logger.e(`${this._tag}-处理目录创建事件失败: ${uri.fsPath}`, e);
+      Logger.e(
+        `${this._moduleName}-${_tag}-处理目录创建事件失败: ${uri.fsPath}`,
+        e,
+      );
     }
   }
 
@@ -306,19 +318,19 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
    * 200ms 内多次调用只执行最后一次
    */
   private clearDirectoryDeleted() {
-    Logger.d(`${this._tag}:检测到目录删除`);
+    Logger.d(`${this._moduleName}-${_tag}:检测到目录删除`);
     // 取消之前的定时器
     if (this.clearDirectoryDeletedSetTimeoutId) {
-      Logger.d(`${this._tag}:目录删除清理操作被取消`);
+      Logger.d(`${this._moduleName}-${_tag}:目录删除清理操作被取消`);
       clearTimeout(this.clearDirectoryDeletedSetTimeoutId);
     }
 
     this.clearDirectoryDeletedSetTimeoutId = setTimeout(async () => {
       try {
-        Logger.d(`${this._tag}:执行目录删除清理操作`);
+        Logger.d(`${this._moduleName}-${_tag}:执行目录删除清理操作`);
         await PubspecUtils.removeAssetDirectory(this.workspaceRoot.fsPath);
       } catch (e) {
-        Logger.e(`${this._tag}:处理目录删除事件失败`, e);
+        Logger.e(`${this._moduleName}-${_tag}:处理目录删除事件失败`, e);
       } finally {
         this.clearDirectoryDeletedSetTimeoutId = undefined;
       }
@@ -329,7 +341,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
     if (this.watcher) {
       this.watcher.dispose();
       this.watcher = undefined;
-      Logger.d(`${this._tag}:图片资源目录监听器已停止`);
+      Logger.d(`${this._moduleName}-${_tag}:图片资源目录监听器已停止`);
     }
   }
 }

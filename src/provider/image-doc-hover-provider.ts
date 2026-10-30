@@ -21,7 +21,7 @@ export class ImageDocHoverProvider
   constructor(private readonly sdk: FlutterSdk) {
     let disposable = vscode.languages.registerHoverProvider(
       { language: "dart", scheme: "file" },
-      this
+      this,
     );
     this.disposableList.push(disposable);
   }
@@ -33,7 +33,7 @@ export class ImageDocHoverProvider
   provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.Hover> {
     return this.genDoc(document, position, token);
   }
@@ -41,14 +41,19 @@ export class ImageDocHoverProvider
   async genDoc(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<vscode.Hover | null> {
     let imagesFilePath = ConfigUtils.imagesFilePath;
     if (!imagesFilePath || imagesFilePath.length == 0) {
       return null;
     }
 
-    let workspaceFsPtah = this.sdk.workspace.fsPath;
+    let module = this.sdk.getModule(document.uri);
+    if (!module) {
+      return null;
+    }
+
+    let workspaceFsPtah = module.workspace.fsPath;
     let documentFsPath = document.uri.fsPath;
     imagesFilePath = pathUtils.join(workspaceFsPtah, imagesFilePath);
     let imageRelPath: string[] = [];
@@ -155,7 +160,7 @@ export class ImageDocHoverProvider
       if (indexOf != -1) {
         let folder = element.substring(0, indexOf);
         let name = element.substring(indexOf + 1);
-        let find = this.findHighImage(folder, name, [
+        let find = this.findHighImage(workspaceFsPtah, folder, name, [
           "3.0x",
           "4.0x",
           "2.0x",
@@ -175,7 +180,7 @@ export class ImageDocHoverProvider
       // hover 里的相对路径会以文档所在目录为基准解析，且无法处理路径中的空格与 windows 反斜杠，
       // 统一用 file:// URI（isTrusted 为 true 且资源在工作区内可正常渲染）
       let markdown = new vscode.MarkdownString(
-        `[${element}](${vscode.Uri.file(openPath).toString()})\n\n![](${vscode.Uri.file(imagePath).toString()})\n`
+        `[${element}](${vscode.Uri.file(openPath).toString()})\n\n![](${vscode.Uri.file(imagePath).toString()})\n`,
       );
       markdown.baseUri = document.uri;
       markdown.isTrusted = true;
@@ -184,9 +189,14 @@ export class ImageDocHoverProvider
     return new vscode.Hover(doc);
   }
 
-  private findHighImage(folder: string, name: string, variants: string[]) {
+  private findHighImage(
+    workspace: string,
+    folder: string,
+    name: string,
+    variants: string[],
+  ) {
     for (const variant of variants) {
-      let path = pathUtils.join(this.sdk.workspace.path, folder, variant, name);
+      let path = pathUtils.join(workspace, folder, variant, name);
       if (fs.existsSync(path)) {
         return pathUtils.join(folder, variant, name);
       }
