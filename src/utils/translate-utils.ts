@@ -4,7 +4,8 @@ import { ConfigUtils } from "./config-utils";
 import Logger from "./logger";
 
 export class TranslateUtils {
-  private static client: alimt20181012 | undefined;
+  // 以 AK/SK 为键缓存客户端，配置变更后能自动使用新的凭证
+  private static clients = new Map<string, alimt20181012>();
   private static async createClient(
     accessKeyId: string,
     accessKeySecret: string,
@@ -34,8 +35,11 @@ export class TranslateUtils {
       return null;
     }
 
-    if (!TranslateUtils.client) {
-      TranslateUtils.client = await TranslateUtils.createClient(ak, sk);
+    const clientKey = `${ak}:${sk}`;
+    let client = TranslateUtils.clients.get(clientKey);
+    if (!client) {
+      client = await TranslateUtils.createClient(ak, sk);
+      TranslateUtils.clients.set(clientKey, client);
     }
 
     let request = new $alimt20181012.TranslateGeneralRequest({
@@ -45,7 +49,7 @@ export class TranslateUtils {
       sourceText: text,
       scene: "general",
     });
-    let response = await TranslateUtils.client.translateGeneral(request);
+    let response = await client.translateGeneral(request);
     if (response.body.code != 200) {
       return null;
     }

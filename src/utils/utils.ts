@@ -144,18 +144,20 @@ function inferTypeFromText(text: string): vscode.SymbolKind | undefined {
   return undefined;
 }
 
+const IMAGE_EXTENSIONS = [
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".svg",
+  ".webm",
+  ".bmp",
+];
+
 export function isImage(name: string): boolean {
-  let path = name.toLowerCase();
-  return (
-    path.endsWith("png") ||
-    path.endsWith("jpg") ||
-    path.endsWith("jpeg") ||
-    path.endsWith("webp") ||
-    path.endsWith("gif") ||
-    path.endsWith("svg") ||
-    path.endsWith("webm") ||
-    path.endsWith("bmp")
-  );
+  const lowerName = name.toLowerCase();
+  return IMAGE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
 }
 
 export function openFile(uri: any) {
@@ -199,7 +201,7 @@ export function unescapeDocumentText(str: string): string {
 function fixEscapeFormatError(
   regex: RegExp,
   text: string,
-  isLineBreaks = false
+  isLineBreaks = false,
 ): string {
   if (text.length == 0) {
     return text;
@@ -234,7 +236,7 @@ function fixEscapeFormatError(
   return fixEscapeFormatError(
     regex,
     replaceRange(text, matchResult.index, oldLength, placeHolder),
-    isLineBreaks
+    isLineBreaks,
   );
 }
 
@@ -242,7 +244,107 @@ function replaceRange(
   str: string,
   start: number,
   length: number,
-  replacement: string
+  replacement: string,
 ): string {
   return str.substring(0, start) + replacement + str.substring(start + length);
+}
+
+/**
+ * 图片引用生成器
+ * 根据图片文件生成 Dart 类的 getter 方法
+ */
+const DART_KEYWORDS = new Set([
+  "abstract",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "base",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "covariant",
+  "default",
+  "deferred",
+  "do",
+  "dynamic",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "extension",
+  "external",
+  "factory",
+  "false",
+  "final",
+  "finally",
+  "for",
+  "Function",
+  "get",
+  "hide",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "interface",
+  "is",
+  "late",
+  "library",
+  "mixin",
+  "new",
+  "null",
+  "of",
+  "on",
+  "operator",
+  "part",
+  "required",
+  "rethrow",
+  "return",
+  "sealed",
+  "set",
+  "show",
+  "static",
+  "super",
+  "switch",
+  "sync",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "type",
+  "typedef",
+  "var",
+  "void",
+  "when",
+  "while",
+  "with",
+  "yield",
+]);
+
+/**
+ * 将图片路径数据转化为符合Dart规则的Key
+ * @param relativePath 相对项目的路径
+ * @returns
+ */
+export function imagePathToDartKey(relativePath: string) {
+  // 去掉文件扩展名
+  relativePath = relativePath.replace(/\.[^/.]+$/, "");
+  // 去掉变体目录
+  relativePath = relativePath.replace(/\/[0-9]+\.[0-9]x\//g, "/");
+  // 将非法标识符字符（含 /, -, ., 空格, 中文等）统一替换为下划线
+  relativePath = relativePath.replace("@", "").replace(/[^A-Za-z0-9_]+/g, "_");
+  // 使用 lowerCamelCase 转换为驼峰命名
+  let methodName = lowerCamelCase(relativePath, false);
+  if (/^[0-9]/.test(methodName)) {
+    // Dart 标识符不能以数字开头
+    methodName = `img${methodName}`;
+  }
+  if (DART_KEYWORDS.has(methodName)) {
+    // 避免生成 `static String get class => ...` 这类非法代码
+    methodName = `img${methodName}`;
+  }
+  return methodName;
 }

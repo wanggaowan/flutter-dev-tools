@@ -41,25 +41,25 @@ export class FlutterSdk {
    * @returns
    */
   getModule(uri: string | vscode.Uri): FlutterModule | null {
-    const filePath = typeof uri === "string" ? uri : uri.path;
-    for (let index = 1; index < this.modules.length; index++) {
-      // this.workspace路径最短，因此先忽略，之后未找到再单独匹配，要匹配最长路径。除了this.workspace外，
-      // 其余FlutterModule都是在this.workspace路径之下，不处理除this.workspace之外的FlutterModule路径
-      // 之下嵌套FlutterModule的情况
-      const element = this.modules[index];
-      if (
-        element.workspace != this.workspace &&
-        filePath.startsWith(element.workspace.path)
-      ) {
-        return element;
+    const filePath = typeof uri === "string" ? uri : uri.fsPath;
+    let match: FlutterModule | null = null;
+    let matchLength = -1;
+    for (const element of this.modules) {
+      // 只匹配完整的目录前缀，避免 app 与 app_admin 这类同前缀目录误判；
+      // 同时保留最长匹配，兼容模块目录嵌套的情况
+      const rootPath = element.workspace.fsPath;
+      const prefix = rootPath.endsWith(path.sep)
+        ? rootPath
+        : `${rootPath}${path.sep}`;
+      if (filePath !== rootPath && !filePath.startsWith(prefix)) {
+        continue;
+      }
+      if (rootPath.length > matchLength) {
+        match = element;
+        matchLength = rootPath.length;
       }
     }
-
-    if (filePath.startsWith(this.workspace.path)) {
-      return this.modules[0];
-    }
-
-    return null;
+    return match;
   }
 }
 
@@ -85,9 +85,11 @@ export class FlutterModule {
   }
 
   /**
-   * 获取项目l10n.yaml指定的arb-dir目录地址
+   * 获取项目 l10n.yaml 的绝对路径配置。
+   * project-dir 可能为相对路径，需要相对当前模块根目录解析；
+   * output-dir 未配置时 Flutter 默认与 arb-dir 相同。
    */
-  getL10nYamlArbDirUri(document?: yaml.Document): vscode.Uri | undefined {
+  getL10nConfig(document?: yaml.Document): L10nConfig | undefined {
     if (!document) {
       document = this.getL10nYaml();
     }
@@ -96,101 +98,105 @@ export class FlutterModule {
       return undefined;
     }
 
-    let rootDirPath = this.workspace.path;
-    let resDirPath = "lib/l10n";
+    const moduleRoot = this.workspace.fsPath;
+    const projectDirValue = document.get("project-dir");
+    const projectDir =
+      typeof projectDirValue === "string" && projectDirValue.length > 0
+        ? path.resolve(moduleRoot, projectDirValue)
+        : moduleRoot;
 
-    let projectDir = document.get("project-dir");
-    if (typeof projectDir === "string" && projectDir.length > 0) {
-      rootDirPath = projectDir.replace(path.sep, "/");
+    const arbDirValue = document.get("arb-dir");
+    const arbDirPath = path.resolve(
+      projectDir,
+      typeof arbDirValue === "string" && arbDirValue.length > 0
+        ? arbDirValue
+        : "lib/l10n",
+    );
+
+    const templateArbFileValue = document.get("template-arb-file");
+    const templateArbFilePath = path.resolve(
+      arbDirPath,
+      typeof templateArbFileValue === "string" &&
+        templateArbFileValue.length > 0
+        ? templateArbFileValue
+        : "app_en.arb",
+    );
+
+    const outputDirValue = document.get("output-dir");
+    const outputDirPath =
+      typeof outputDirValue === "string" && outputDirValue.length > 0
+        ? path.resolve(projectDir, outputDirValue)
+        : arbDirPath;
+
+    const outputFileValue = document.get("output-localization-file");
+    const outputLocalizationFilePath = path.resolve(
+      outputDirPath,
+      typeof outputFileValue === "string" && outputFileValue.length > 0
+        ? outputFileValue
+        : "app_localizations.dart",
+    );
+
+    const useEscapValue = document.get("use-escaping");
+    let useEscaping: boolean = false;
+    if (typeof useEscapValue === "boolean") {
+      useEscaping = true;
+    } else if (typeof useEscapValue === "string") {
+      useEscaping = "true" === useEscapValue;
     }
 
-    let arbDir = document.get("arb-dir");
-    if (typeof arbDir === "string" && arbDir.length > 0) {
-      resDirPath = arbDir.replace(path.sep, "/");
-    }
+    return {
+      arbDirPath,
+      templateArbFilePath,
+      outputDirPath,
+      outputLocalizationFilePath,
+      useEscaping,
+    };
+  }
 
-    return vscode.Uri.parse(path.join(rootDirPath, resDirPath));
+  /**
+   * 获取项目l10n.yaml指定的arb-dir目录地址
+   */
+  getL10nYamlArbDirUri(document?: yaml.Document): vscode.Uri | undefined {
+    const config = this.getL10nConfig(document);
+    return config ? vscode.Uri.file(config.arbDirPath) : undefined;
   }
 
   /**
    * 获取项目l10n.yaml指定的template-arb-file文件地址
    */
   getL10nYamlArbFileUri(document?: yaml.Document): vscode.Uri | undefined {
-    if (!document) {
-      document = this.getL10nYaml();
-    }
-
-    if (!document) {
-      return undefined;
-    }
-
-    let dirUri = this.getL10nYamlArbDirUri(document);
-    if (!dirUri) {
-      return undefined;
-    }
-
-    let resName = "app_en.arb";
-    let templateArbFile = document.get("template-arb-file");
-    if (typeof templateArbFile === "string" && templateArbFile.length > 0) {
-      resName = templateArbFile;
-    }
-
-    return vscode.Uri.joinPath(dirUri, resName);
+    const config = this.getL10nConfig(document);
+    return config ? vscode.Uri.file(config.templateArbFilePath) : undefined;
   }
 
   /**
    * 获取项目l10n.yaml指定的output-dir目录地址
    */
   getL10nYamlOutputDirUri(document?: yaml.Document): vscode.Uri | undefined {
-    if (!document) {
-      document = this.getL10nYaml();
-    }
-
-    if (!document) {
-      return undefined;
-    }
-
-    let rootDirPath = this.workspace.path;
-    var outputDir = "lib/l10n";
-
-    let projectDir = document.get("project-dir");
-    if (typeof projectDir === "string" && projectDir.length > 0) {
-      rootDirPath = projectDir.replace(path.sep, "/");
-    }
-
-    let dir = document.get("output-dir");
-    if (typeof dir === "string" && dir.length > 0) {
-      outputDir = dir.replace(path.sep, "/");
-    }
-
-    return vscode.Uri.parse(path.join(rootDirPath, outputDir));
+    const config = this.getL10nConfig(document);
+    return config ? vscode.Uri.file(config.outputDirPath) : undefined;
   }
 
   /**
    * 获取项目l10n.yaml指定的output-localization-file文件地址
    */
   getL10nYamlOutputFileUri(document?: yaml.Document): vscode.Uri | undefined {
-    if (!document) {
-      document = this.getL10nYaml();
-    }
-
-    if (!document) {
-      return undefined;
-    }
-
-    let dirUri = this.getL10nYamlOutputDirUri(document);
-    if (!dirUri) {
-      return undefined;
-    }
-
-    var outputLocalizationFile = "app_localizations.dart";
-    let templateFile = document.get("output-localization-file");
-    if (typeof templateFile === "string" && templateFile.length > 0) {
-      outputLocalizationFile = templateFile;
-    }
-
-    return vscode.Uri.joinPath(dirUri, outputLocalizationFile);
+    const config = this.getL10nConfig(document);
+    return config
+      ? vscode.Uri.file(config.outputLocalizationFilePath)
+      : undefined;
   }
+}
+
+/**
+ * l10n.yaml 解析后的绝对路径配置
+ */
+export interface L10nConfig {
+  arbDirPath: string;
+  templateArbFilePath: string;
+  outputDirPath: string;
+  outputLocalizationFilePath: string;
+  useEscaping: boolean;
 }
 
 export class DartSdk {

@@ -2,14 +2,10 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { ConfigUtils } from "./config-utils";
-import { isImage, lowerCamelCase } from "./utils";
+import { imagePathToDartKey, isImage, lowerCamelCase } from "./utils";
 import Logger from "./logger";
 import { ForamtUtils } from "./format-utils";
 
-/**
- * 图片引用生成器
- * 根据图片文件生成 Dart 类的 getter 方法
- */
 export class ImageReferenceGenerator {
   /**
    * 按工作区根目录隔离的操作队列尾部 Promise。
@@ -73,7 +69,7 @@ export class ImageReferenceGenerator {
    * @param imagePath 图片相对于项目根目录的路径（如：assets/images/ht/repair/fuwu.png）
    * @returns 驼峰命名的方法名（如：htRepairFuwu）
    */
-  private static imageToMethodName(imagePath: string): string {
+  private static imageToMethodName(relativePath: string): string {
     // 获取 imageSrcPath 配置
     const imageSrcPath = ConfigUtils.imageSrcPath;
     if (!imageSrcPath) {
@@ -81,25 +77,25 @@ export class ImageReferenceGenerator {
     }
 
     // 去掉 imageSrcPath 前缀
-    let relativePath = imagePath;
     const normalizedImageSrcPath = imageSrcPath.split(path.sep).join("/");
-    const normalizedImagePath = imagePath.split(path.sep).join("/");
-
+    const normalizedImagePath = relativePath.split(path.sep).join("/");
     if (normalizedImagePath.startsWith(normalizedImageSrcPath + "/")) {
       relativePath = normalizedImagePath.substring(
         normalizedImageSrcPath.length + 1,
       );
     }
 
-    // 去掉文件扩展名
-    relativePath = relativePath.replace(/\.[^/.]+$/, "");
-    // 去掉变体目录
-    relativePath = relativePath.replace(/\/[0-9]+\.[0-9]x\//g, "/");
-    // 将特殊字符替换为下划线：/, @, -, . 等
-    relativePath = relativePath.replace(/[@\/\-\.]/g, "_");
-
     // 使用 lowerCamelCase 转换为驼峰命名
-    return lowerCamelCase(relativePath, false);
+    let methodName = imagePathToDartKey(relativePath);
+    return methodName;
+  }
+
+  private static hashString(value: string): string {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(16);
   }
 
   /**
@@ -154,6 +150,17 @@ export class ImageReferenceGenerator {
   ): Promise<void> {
     const classPath = this.getImagesClassPath(workspaceRoot);
     const uri = vscode.Uri.file(classPath);
+
+    // 文件在编辑器中有未保存修改时跳过写入，避免覆盖用户内容
+    const openDocument = vscode.workspace.textDocuments.find(
+      document => document.uri.fsPath === classPath,
+    );
+
+    if (openDocument?.isDirty) {
+      await openDocument.save();
+      return;
+    }
+
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf-8"));
     await ForamtUtils.formatWithDartCommand(uri);
   }
@@ -177,12 +184,12 @@ export class ImageReferenceGenerator {
    * @returns 生成的 getter 方法字符串
    */
   private static generateGetterMethod(
-    imagePath: string,
+    relativePath: string,
     preAddSpaceLine: boolean,
   ): string {
-    const methodName = this.imageToMethodName(imagePath);
+    const methodName = this.imageToMethodName(relativePath);
     // 转换为 Unix 风格路径
-    let unixPath = imagePath.split(path.sep).join("/");
+    let unixPath = relativePath.split(path.sep).join("/");
     unixPath = unixPath.replace(/\/[0-9]+\.[0-9]x\//g, "/");
     return `${preAddSpaceLine ? "" : "\n"}\n  static String get ${methodName} => '${unixPath}';\n`;
   }
@@ -191,12 +198,9 @@ export class ImageReferenceGenerator {
    * 收集指定目录下的所有图片文件（去重）
    * 只扫描主目录（非变体目录），变体目录下的图片不单独生成引用
    * @param directoryPath 目录绝对路径
-   * @returns 图片相对路径数组（相对于项目根目录）
+   * @returns 图片绝对路径数组
    */
-  private static collectImages(
-    workspaceRoot: string,
-    directoryPath: string,
-  ): string[] {
+  static collectImages(workspaceRoot: string, directoryPath: string): string[] {
     const images: string[] = [];
     if (!fs.existsSync(directoryPath)) {
       return [];
@@ -226,8 +230,7 @@ export class ImageReferenceGenerator {
           scanDirectory(fullPath);
         } else if (entry.isFile() && isImage(entry.name)) {
           // 计算相对于项目根目录的路径
-          const relativePath = path.relative(workspaceRoot, fullPath);
-          images.push(relativePath);
+          images.push(fullPath);
         }
       }
     };
@@ -240,7 +243,7 @@ export class ImageReferenceGenerator {
    * 指定路径是否在变体目录下
    * @param path 检测的路径
    */
-  private static isInVariantDir(workspaceRoot: string, dirPath: string) {
+  static isInVariantDir(workspaceRoot: string, dirPath: string) {
     // 计算相对于项目根目录的路径
     const relativePath = path.relative(workspaceRoot, dirPath);
     // 检查路径中是否包含变体目录（1.5x, 2.0x, 3.0x, 4.0x 等），如果是则不处理
@@ -271,86 +274,18 @@ export class ImageReferenceGenerator {
     directoryPath: string,
     clearNotExistData: boolean,
   ): Promise<void> {
-    try {
-      // 确保 Images 类存在
-      await this.ensureImagesClassExists(workspaceRoot);
-
-      // 收集所有图片
-      const imagePaths = this.collectImages(workspaceRoot, directoryPath);
-
-      if (imagePaths.length === 0) {
-        Logger.d(`${path.basename(workspaceRoot)}:未找到需要生成引用的图片`);
-        return;
-      }
-
-      // 读取现有内容
-      let content = this.readImagesClassContent(workspaceRoot);
-      let deleteCount = 0;
-      if (clearNotExistData) {
-        const pruned = this.doPruneMissingReferences(workspaceRoot, content);
-        content = pruned.content;
-        deleteCount = pruned.removed.length;
-      }
-
-      const className = this.getImagesClassName();
-      // 如果没有内容，初始化基本结构
-      if (!content.trim()) {
-        content = `class ${className} {
-  ${className}._inner();
-}
-`;
-      }
-
-      // 找出类定义的结束位置（最后一个 }）
-      const lastBraceIndex = content.lastIndexOf("}");
-      if (lastBraceIndex === -1) {
-        Logger.e(
-          `${path.basename(workspaceRoot)}:Images 类格式不正确，无法找到类定义结束位置"`,
-        );
-        return;
-      }
-
-      // 提取类定义的前后部分
-      const beforeContent = content.substring(0, lastBraceIndex);
-      const afterContent = content.substring(lastBraceIndex);
-
-      // 生成新的 getter 方法
-      let newMethods = "";
-      let addedCount = 0;
-
-      let endOfBreakLine = !beforeContent.trim().endsWith("\n");
-      for (const imagePath of imagePaths) {
-        const methodName = this.imageToMethodName(imagePath);
-
-        // 检查是否已存在
-        if (this.methodExists(content, methodName)) {
-          continue;
-        }
-
-        newMethods += this.generateGetterMethod(imagePath, endOfBreakLine);
-        endOfBreakLine = false;
-        addedCount++;
-      }
-
-      if (addedCount === 0 && deleteCount == 0) {
-        Logger.d(
-          `${path.basename(workspaceRoot)}:所有图片引用已存在，无需更新`,
-        );
-        return;
-      }
-
-      // 重新组合内容
-      const updatedContent = beforeContent + newMethods + afterContent;
-
-      // 写入文件
-      await this.writeImagesClassContent(workspaceRoot, updatedContent);
-
-      Logger.d(
-        `${path.basename(workspaceRoot)}:已为 ${addedCount} 个图片生成引用方法, 已删除${deleteCount}个无效图片引用方法`,
-      );
-    } catch (e) {
-      Logger.e(`${path.basename(workspaceRoot)}:生成图片引用失败`, e);
+    // 收集当前目录下的所有图片
+    const imagePaths = this.collectImages(workspaceRoot, directoryPath);
+    if (imagePaths.length == 0) {
+      Logger.d(`${path.basename(workspaceRoot)}:未找到需要生成引用的图片`);
+      return;
     }
+    this.doGenerateForImages(
+      workspaceRoot,
+      imagePaths,
+      clearNotExistData,
+      false,
+    );
   }
 
   /**
@@ -373,11 +308,19 @@ export class ImageReferenceGenerator {
     content: string,
   ): { content: string; removed: string[] } {
     const removed: string[] = [];
-    const regex = /\s*static\s+String\s+get\s+(\w+)\s*=>\s*'([^']*)';\n?/g;
+    // dart format 可能把单引号改成双引号，两种引号都要匹配
+    const regex =
+      /\s*static\s+String\s+get\s+(\w+)\s*=>\s*(?:'([^']*)'|"([^"]*)")\s*;\n?/g;
 
     const pruned = content.replace(
       regex,
-      (match, methodName: string, assetPath: string) => {
+      (
+        match,
+        methodName: string,
+        singleQuoted: string | undefined,
+        doubleQuoted: string | undefined,
+      ) => {
+        const assetPath = singleQuoted ?? doubleQuoted ?? "";
         const imagePath = path.join(workspaceRoot, assetPath);
         // 只检查主目录文件是否存在，不检查变体
         if (fs.existsSync(imagePath)) {
@@ -436,100 +379,69 @@ export class ImageReferenceGenerator {
     workspaceRoot: string,
     directoryPath: string,
   ): Promise<void> {
-    try {
-      // 确保 Images 类存在
-      await this.ensureImagesClassExists(workspaceRoot);
-
-      // 收集当前目录下的所有图片
-      const imagePaths = this.collectImages(workspaceRoot, directoryPath);
-
-      // 读取现有内容
-      let content = this.readImagesClassContent(workspaceRoot);
-      // 如果没有内容，初始化基本结构
-      if (!content.trim()) {
-        const className = this.getImagesClassName();
-        content = `class ${className} {
-  ${className}._inner();
-}
-`;
-      }
-
-      // 保留类定义结构，移除所有 getter 方法
-      const regex =
-        /\s*static\s+String\s+get\s+\w+\s*=>\s*('([^']*)'|"([^"]*)")\s*;\n?/g;
-      let cleanedContent = content.replace(regex, "");
-
-      // 找出类定义的结束位置
-      const lastBraceIndex = cleanedContent.lastIndexOf("}");
-      if (lastBraceIndex === -1) {
-        Logger.e(`${path.basename(workspaceRoot)}:Images 类格式不正确`);
-        return;
-      }
-
-      const beforeContent = cleanedContent.substring(0, lastBraceIndex);
-      const afterContent = cleanedContent.substring(lastBraceIndex);
-
-      // 重新生成所有 getter 方法
-      let newMethods = "";
-      for (const imagePath of imagePaths) {
-        newMethods += this.generateGetterMethod(imagePath, false);
-      }
-
-      const updatedContent = beforeContent + newMethods + afterContent;
-      await this.writeImagesClassContent(workspaceRoot, updatedContent);
-
-      Logger.d(
-        `${path.basename(workspaceRoot)}:已重新生成 ${imagePaths.length} 个图片引用`,
-      );
-    } catch (e) {
-      Logger.e(`${path.basename(workspaceRoot)}:重新生成图片引用失败`, e);
+    // 收集当前目录下的所有图片
+    const imagePaths = this.collectImages(workspaceRoot, directoryPath);
+    if (imagePaths.length == 0) {
+      Logger.d(`${path.basename(workspaceRoot)}:未找到需要生成引用的图片`);
+      return;
     }
+    this.doGenerateForImages(workspaceRoot, imagePaths, false, true);
   }
 
   /**
-   * 为单个图片生成引用
-   * @param imagePath 图片的绝对路径
+   * 为图片生成引用
+   * @param imagePaths 图片的绝对路径
    */
-  static async generateForSingleImage(
+  static async generateForImages(
     workspaceRoot: string,
-    imagePath: string,
+    imagePaths: string[],
   ): Promise<void> {
-    if (this.isInVariantDir(workspaceRoot, path.dirname(imagePath))) {
-      Logger.d(`跳过变体目录下的图片: ${imagePath}`);
+    if (imagePaths.length == 0) {
       return;
     }
 
     return ImageReferenceGenerator.enqueue(workspaceRoot, () =>
-      this.doGenerateForSingleImage(workspaceRoot, imagePath),
+      this.doGenerateForImages(workspaceRoot, imagePaths, false, false),
     );
   }
 
-  private static async doGenerateForSingleImage(
+  private static async doGenerateForImages(
     workspaceRoot: string,
-    imagePath: string,
+    imagePaths: string[],
+    clearNotExistData: boolean,
+    recreate: boolean,
   ): Promise<void> {
     try {
       // 确保 Images 类存在
       await this.ensureImagesClassExists(workspaceRoot);
-
       // 读取现有内容
       let content = this.readImagesClassContent(workspaceRoot);
-      const relativePath = path.relative(workspaceRoot, imagePath);
-      const methodName = this.imageToMethodName(relativePath);
-
-      // 检查是否已存在
-      if (this.methodExists(content, methodName)) {
-        Logger.d(
-          `${path.basename(workspaceRoot)}:图片引用已存在: ${methodName}`,
-        );
-        return;
+      let deleteCount = 0;
+      if (!recreate && clearNotExistData) {
+        const pruned = this.doPruneMissingReferences(workspaceRoot, content);
+        content = pruned.content;
+        deleteCount = pruned.removed.length;
       }
 
-      // 找出类定义的结束位置
+      const className = this.getImagesClassName();
+      // 如果没有内容，初始化基本结构
+      if (!content.trim()) {
+        content = `class ${className} {
+  ${className}._inner();
+}
+`;
+      } else if (recreate) {
+        // 保留类定义结构，移除所有 getter 方法
+        const regex =
+          /\s*static\s+String\s+get\s+\w+\s*=>\s*('([^']*)'|"([^"]*)")\s*;\n?/g;
+        content = content.replace(regex, "");
+      }
+
+      // 找出类定义的结束位置（最后一个 }）
       const lastBraceIndex = content.lastIndexOf("}");
       if (lastBraceIndex === -1) {
         Logger.e(
-          `${path.basename(workspaceRoot)}:Images 类格式不正确，无法找到类定义结束位置`,
+          `${path.basename(workspaceRoot)}:Images 类格式不正确，无法找到类定义结束位置"`,
         );
         return;
       }
@@ -539,20 +451,53 @@ export class ImageReferenceGenerator {
       const afterContent = content.substring(lastBraceIndex);
 
       // 生成新的 getter 方法
-      const endOfBreakLine = !beforeContent.trim().endsWith("\n");
-      const newMethod = this.generateGetterMethod(relativePath, endOfBreakLine);
+      let newMethods = "";
+      let addedCount = 0;
+
+      let endOfBreakLine = !beforeContent.trim().endsWith("\n");
+      // 本次新增的方法名去重：不同文件归一化后可能得到相同名称，
+      // 直接写入会生成重复 getter 导致编译错误
+      const addedNames = new Set<string>();
+      for (const imagePath of imagePaths) {
+        const relativePath = path.relative(workspaceRoot, imagePath);
+        const methodName = this.imageToMethodName(relativePath);
+
+        if (addedNames.has(methodName)) {
+          Logger.d(
+            `图片引用名称重复，已跳过: ${relativePath} -> ${methodName}`,
+          );
+          continue;
+        }
+
+        // 检查是否已存在
+        if (!recreate && this.methodExists(content, methodName)) {
+          continue;
+        }
+
+        addedNames.add(methodName);
+        newMethods += this.generateGetterMethod(relativePath, endOfBreakLine);
+        endOfBreakLine = false;
+        addedCount++;
+      }
+
+      if (addedCount === 0 && deleteCount == 0) {
+        Logger.d(
+          `${path.basename(workspaceRoot)}:所有图片引用已存在，无需更新`,
+        );
+        return;
+      }
 
       // 重新组合内容
-      const updatedContent = beforeContent + newMethod + afterContent;
+      const updatedContent = beforeContent + newMethods + afterContent;
 
       // 写入文件
       await this.writeImagesClassContent(workspaceRoot, updatedContent);
 
       Logger.d(
-        `${path.basename(workspaceRoot)}:已为图片生成引用: ${methodName}`,
+        `${path.basename(workspaceRoot)}:已为 ${addedCount} 个图片生成引用方法, 已删除${deleteCount}个无效图片引用方法`,
       );
     } catch (e) {
-      Logger.e(`${path.basename(workspaceRoot)}:生成单个图片引用失败`, e);
+      Logger.e(`${path.basename(workspaceRoot)}:生成图片引用失败`, e);
     }
   }
 

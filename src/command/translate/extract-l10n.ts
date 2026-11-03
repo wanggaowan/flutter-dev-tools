@@ -8,7 +8,6 @@ import Logger from "../../utils/logger";
 import { getSdk } from "../../extension";
 import pathUtils from "path";
 import * as fs from "fs";
-import * as yaml from "yaml";
 import { TranslateUtils } from "../../utils/translate-utils";
 import { ConfigUtils } from "../../utils/config-utils";
 import { TerminalCommand } from "../terminal-command";
@@ -22,13 +21,13 @@ export class ExtractL10n {
 
   constructor() {
     let dispose = vscode.commands.registerCommand(COMMAND_EXTRACT_L10N, uri =>
-      ExtractL10n.translate(false)
+      ExtractL10n.translate(false),
     );
     this.disposableList.push(dispose);
 
     dispose = vscode.commands.registerCommand(
       COMMAND_EXTRACT_L10N_AND_TRANSLATE,
-      uri => ExtractL10n.translate(true)
+      uri => ExtractL10n.translate(true),
     );
     this.disposableList.push(dispose);
   }
@@ -81,60 +80,46 @@ export class ExtractL10n {
       return;
     }
 
-    let rootDirPath = sdk.workspace.path;
-    let resDirPath = "lib/l10n";
-    let resName = "app_en.arb";
-    var useEscaping = false;
-    let l10nFilePath = vscode.Uri.joinPath(sdk.workspace, "l10n.yaml");
-    if (fs.existsSync(l10nFilePath.path)) {
-      let contents = fs.readFileSync(l10nFilePath.fsPath, "utf-8");
-      let result = yaml.parseDocument(contents);
-
-      let projectDir = result.get("project-dir");
-      if (
-        typeof projectDir === "string" &&
-        projectDir &&
-        projectDir.length > 0
-      ) {
-        rootDirPath = projectDir;
-      }
-
-      let arbDir = result.get("arb-dir");
-      if (typeof arbDir === "string" && arbDir && arbDir.length > 0) {
-        resDirPath = arbDir;
-      }
-
-      let templateArbFile = result.get("template-arb-file");
-      if (
-        typeof templateArbFile === "string" &&
-        templateArbFile &&
-        templateArbFile.length > 0
-      ) {
-        resName = templateArbFile;
-      }
-
-      let useEscap = result.get("use-escaping");
-      if (typeof useEscap === "boolean") {
-        useEscaping = useEscap;
-      } else if (typeof useEscap === "string") {
-        useEscaping = "true" === useEscap;
-      }
+    // 当前文档可能属于子项目，按所在模块解析 l10n 配置
+    const module = sdk.getModule(editor.document.uri);
+    if (!module) {
+      Logger.showNotification("未识别Flutter项目", "error");
+      return;
     }
 
-    let tempArbFilePath = pathUtils.join(rootDirPath, resDirPath, resName);
+    const l10nConfig = module.getL10nConfig();
+    if (!l10nConfig) {
+      Logger.showNotification(
+        "未找到 l10n.yaml 配置，请提供lib/l10n/app_en.arb模版文件或通过l10n.yaml配置",
+        "error",
+      );
+      return;
+    }
+
+    const resName = pathUtils.basename(l10nConfig.templateArbFilePath);
+    var useEscaping = false;
+    const l10nYaml = module.getL10nYaml();
+    const useEscap = l10nYaml?.get("use-escaping");
+    if (typeof useEscap === "boolean") {
+      useEscaping = useEscap;
+    } else if (typeof useEscap === "string") {
+      useEscaping = "true" === useEscap;
+    }
+
+    let tempArbFilePath = l10nConfig.templateArbFilePath;
     try {
       let stat = fs.statSync(tempArbFilePath);
       if (stat.isDirectory()) {
         Logger.showNotification(
           "未配置arb模板文件，请提供lib/l10n/app_en.arb模版文件或通过l10n.yaml配置",
-          "error"
+          "error",
         );
         return;
       }
     } catch (e) {
       Logger.showNotification(
         "未配置arb模板文件，请提供lib/l10n/app_en.arb模版文件或通过l10n.yaml配置",
-        "error"
+        "error",
       );
       return;
     }
@@ -183,19 +168,19 @@ export class ExtractL10n {
     if (existKey) {
       let range = new vscode.Range(
         pos.with(pos.line, matchStartIndex),
-        pos.with(pos.line, matchEndIndex)
+        pos.with(pos.line, matchEndIndex),
       );
       this.repleaceDocument(editor, existKey, placeholderList, range);
       return;
     }
 
     let tempLocale = tempJsonObj
-      ? tempJsonObj["@@locale_alias"] ?? tempJsonObj["@@locale"]
+      ? (tempJsonObj["@@locale_alias"] ?? tempJsonObj["@@locale"])
       : undefined;
     if (!tempLocale) {
       Logger.showNotification(
         `模板文件${resName}未配置@@locale属性或@@locale_alias属性`,
-        "error"
+        "error",
       );
       return;
     }
@@ -204,7 +189,7 @@ export class ExtractL10n {
       new TranslateClass(tempArbFilePath, tempJsonObj, tempLocale),
     ];
     if (needTranslate) {
-      let arbDir = pathUtils.join(rootDirPath, resDirPath);
+      let arbDir = l10nConfig.arbDirPath;
       let files = fs.readdirSync(arbDir);
       for (const element of files) {
         if (element.toLowerCase().endsWith(".arb")) {
@@ -228,9 +213,9 @@ export class ExtractL10n {
           arbs,
           useEscaping,
           progress,
-          token
+          token,
         );
-      }
+      },
     );
 
     if (!result) {
@@ -252,8 +237,8 @@ export class ExtractL10n {
         prompt: keyInvalid
           ? "翻译失败，请手动输入多语言key"
           : find
-          ? "已存在相同的key，请手动输入多语言key"
-          : undefined,
+            ? "已存在相同的key，请手动输入多语言key"
+            : undefined,
         validateInput: value => {
           if (!value) {
             return "key不能为空";
@@ -278,7 +263,7 @@ export class ExtractL10n {
 
     let range = new vscode.Range(
       pos.with(pos.line, matchStartIndex),
-      pos.with(pos.line, matchEndIndex)
+      pos.with(pos.line, matchEndIndex),
     );
     await this.repleaceDocument(editor, key!, placeholderList, range);
     let errorMsg: string | undefined;
@@ -310,7 +295,7 @@ export class ExtractL10n {
     editor: vscode.TextEditor,
     key: string,
     placeholderList: string[],
-    range: vscode.Range
+    range: vscode.Range,
   ) {
     let content = `S.current.${key}`;
     if (placeholderList.length > 0) {
@@ -338,7 +323,7 @@ export class ExtractL10n {
   private static async writeTranslateResult(
     uri: string,
     key: string,
-    translate: string
+    translate: string,
   ) {
     var content = fs.readFileSync(uri, "utf-8");
     var obj = JSON.parse(content);
@@ -357,7 +342,7 @@ export class ExtractL10n {
       message?: string;
       increment?: number;
     }>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ) {
     progress.report({
       message: `Translating key...}`,
@@ -366,7 +351,7 @@ export class ExtractL10n {
     let enTranslate = await TranslateUtils.translate(
       sourceLanguage,
       "en",
-      keyTranslateText
+      keyTranslateText,
     );
 
     if (token.isCancellationRequested) {
@@ -407,7 +392,7 @@ export class ExtractL10n {
       if (element.local == sourceLanguage) {
         element.value = TranslateUtils.fixTranslateError(
           translateText,
-          useEscaping
+          useEscaping,
         );
         continue;
       }
@@ -415,7 +400,7 @@ export class ExtractL10n {
       if (element.local == "en" && enTranslate && !isFormat) {
         element.value = TranslateUtils.fixTranslateError(
           enTranslate,
-          useEscaping
+          useEscaping,
         );
         continue;
       }
@@ -423,7 +408,7 @@ export class ExtractL10n {
       element.value = await TranslateUtils.translate(
         sourceLanguage,
         element.local,
-        translateText
+        translateText,
       );
 
       if (!element.value) {
@@ -433,7 +418,7 @@ export class ExtractL10n {
 
       element.value = TranslateUtils.fixTranslateError(
         element.value,
-        useEscaping
+        useEscaping,
       );
     }
 
@@ -445,11 +430,11 @@ export class ExtractL10n {
 
   private static mapStrToKey(
     str: string | null | undefined,
-    isFormat: boolean
+    isFormat: boolean,
   ): string | null {
     var value = TranslateUtils.fixNewLineFormatError(str ?? null)?.replaceAll(
       "\\n",
-      "_"
+      "_",
     );
     if (value == null || value.length == 0) {
       return null;
@@ -502,7 +487,7 @@ class TranslateClass {
   constructor(
     readonly fileUri: string,
     public jsonObj?: any,
-    public local?: string
+    public local?: string,
   ) {}
 
   parseJson() {

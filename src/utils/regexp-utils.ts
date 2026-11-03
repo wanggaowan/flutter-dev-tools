@@ -22,15 +22,30 @@ export const strRegex = new RegExp(/"((\\")|[^"])*"|'((\\')|[^'])*'/g);
 // 以下正则则匹配$前无反斜杠
 export const strRefRegex = new RegExp(/((?<!\\)\$[A-Za-z_][A-Za-z_0-9]*|(?<!\\)\${.*?})/g);
 
-// 匹配 S.current.xxx 或 S.of(xxx).xxx 格式字符串，支持带参数调用如 S.current.xxx(arg1, arg2)
+// 匹配 S.current.xxx 或 S.of(context).xxx 格式调用，支持带参数调用如 S.current.xxx(arg1, arg2)。
+// of 的参数只匹配到第一个右括号，避免贪婪匹配吞掉后续链式调用（如 .toUpperCase()）
 export const strCallRegex = new RegExp(
-  /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*(\([^)]*\))?/g
+  /S\s*\.\s*(?:of\([^)]*\)|current)\s*\.\s*[a-zA-Z_][a-zA-Z_0-9]*(?:\([^)]*\))?/g
 );
 
-// 匹配 S.current.xxx 或 S.of(xxx).xxx 格式字符串，支持带参数调用如 S.current.xxx(arg1, arg2),以;或,结尾
+// 匹配 S.current.xxx 或 S.of(context).xxx 格式调用，以;或,结尾
 export const strCallRegexWithEndSymbol = new RegExp(
-  /S\s*.\s*(of\(.*\)|current)\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*(\([^)]*\))?(\s*[;,]|)/g
+  /S\s*\.\s*(?:of\([^)]*\)|current)\s*\.\s*[a-zA-Z_][a-zA-Z_0-9]*(?:\([^)]*\))?(?:\s*[;,])?/g
 );
+
+/**
+ * 从 S.current.xxx / S.of(context).xxx 调用文本中提取多语言 key
+ */
+export function extractL10nKeyFromCall(matchText: string): string | null {
+  if (!matchText) {
+    return null;
+  }
+  const match =
+    /S\s*\.\s*(?:of\([^)]*\)|current)\s*\.\s*([a-zA-Z_][a-zA-Z_0-9]*)/.exec(
+      matchText,
+    );
+  return match ? match[1] : null;
+}
 
 // 匹配图片资源的引用，如Images.xxx，点号前后允许空格和换行
 export const imageRefRegex = new RegExp(/Images\s*.\s*[a-zA-Z_][a-zA-Z_0-9]*/g);

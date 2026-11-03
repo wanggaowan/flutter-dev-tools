@@ -5,7 +5,7 @@ import { disposeAll } from "../../utils/utils";
 import Logger from "../../utils/logger";
 import { executeReferenceProvider } from "../../utils/build-in-command-utils";
 import path from "path";
-import { jsonKeyRegex } from "../../utils/regexp-utils";
+import { matchArbKeyLine } from "../../utils/arb-utils";
 
 const _tag = "L10nReferenceProvider";
 
@@ -69,19 +69,18 @@ export class L10nReferenceProvider
     context: vscode.ReferenceContext | undefined,
     token: vscode.CancellationToken,
   ): Promise<vscode.Location[] | null> {
-    let path = document.uri.path;
-    let provider = this.providers.get(path);
-    if (provider != null) {
-      return provider.findReference(document, position, context, token);
-    }
-
-    let module = this.sdk.getModule(path);
+    let module = this.sdk.getModule(document.uri);
     if (module == null) {
       return null;
     }
 
-    provider = new L10nReferenceProviderModule(module);
-    this.providers.set(path, provider);
+    // 以模块为粒度缓存，避免为每个文档创建一套监听器
+    const key = module.workspace.toString();
+    let provider = this.providers.get(key);
+    if (provider == null) {
+      provider = new L10nReferenceProviderModule(module);
+      this.providers.set(key, provider);
+    }
     return provider.findReference(document, position, context, token);
   }
 }
@@ -117,14 +116,15 @@ class L10nReferenceProviderModule implements vscode.Disposable {
     context: vscode.ReferenceContext | undefined,
     token: vscode.CancellationToken,
   ): Promise<vscode.Location[] | null> {
-    let line = document.lineAt(position.line);
-    let text = document.getText(line.range);
-    let keyValue = text.split(":");
-    if (keyValue.length != 2) {
+    // 严格按 ARB key 行解析，避免 value 中包含冒号时 key 解析错误
+    const keyLine = matchArbKeyLine(
+      document.lineAt(position.line).text,
+    );
+    if (!keyLine) {
       return null;
     }
 
-    let key = keyValue[0].replaceAll('"', "").trim();
+    let key = keyLine.key;
     let result = this.getArbFiles(context == undefined);
     let refrences: vscode.Location[] = [];
     let outputLocalizationFile = result.outputLocalizationFile;
@@ -205,7 +205,7 @@ class L10nReferenceProviderModule implements vscode.Disposable {
       }
 
       try {
-        if (element.path == document.uri.path) {
+        if (element.fsPath === document.uri.fsPath) {
           continue;
         }
 
@@ -216,17 +216,14 @@ class L10nReferenceProviderModule implements vscode.Disposable {
 
         let lines = content.split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
-          let line = lines[i];
-          let match = line.match(jsonKeyRegex);
-          if (match) {
-            let key2 = match[0].substring(0, match[0].length - 1).trim();
-            if (key2 == `"${key}"`) {
-              let location = new vscode.Location(
+          const keyLine = matchArbKeyLine(lines[i]);
+          if (keyLine && keyLine.key === key) {
+            refrences.push(
+              new vscode.Location(
                 element,
-                new vscode.Position(i, match.index ?? 0),
-              );
-              refrences.push(location);
-            }
+                new vscode.Position(i, keyLine.indent + 1),
+              ),
+            );
           }
         }
       } catch (e) {

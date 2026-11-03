@@ -5,6 +5,19 @@ import * as pathUtils from "path";
 const KEY_LINE_REGEX = /^(\s*)"((?:@)?[^"]+)"\s*:/;
 
 /**
+ * 解析 arb 文件中的顶层 key 行，返回 key 与缩进；非 key 行返回 undefined
+ */
+export function matchArbKeyLine(
+  line: string
+): { key: string; indent: number } | undefined {
+  const match = KEY_LINE_REGEX.exec(line);
+  if (!match) {
+    return undefined;
+  }
+  return { indent: match[1].length, key: match[2] };
+}
+
+/**
  * 读取 arb JSON 文件的目标语言：优先 @@locale_alias，其次 @@locale
  */
 export function readArbLocale(obj: any): string | undefined {

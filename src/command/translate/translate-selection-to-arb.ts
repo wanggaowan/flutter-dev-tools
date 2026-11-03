@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as pathUtils from "path";
-import * as yaml from "yaml";
 import { disposeAll } from "../../utils/utils";
 import {
   extractSelectedTopLevelKeys,
@@ -22,7 +21,7 @@ export class TranslateSelectionToArb {
   constructor() {
     let dispose = vscode.commands.registerCommand(
       COMMAND_TRANSLATE_SELECTION_TO_ARB,
-      TranslateSelectionToArb.execute
+      TranslateSelectionToArb.execute,
     );
     this.disposableList.push(dispose);
   }
@@ -49,6 +48,19 @@ export class TranslateSelectionToArb {
       return;
     }
 
+    let sdk = getSdk();
+    if (!sdk) {
+      Logger.showNotification("dart sdk未初始化", "error");
+      return;
+    }
+
+    // 当前 arb 文件可能属于子项目，按所在模块解析 l10n 配置
+    const module = sdk.getModule(doc.uri);
+    if (!module) {
+      Logger.showNotification("未识别Flutter项目", "error");
+      return;
+    }
+
     const selectedKeys = extractSelectedTopLevelKeys(editor);
     if (selectedKeys.length === 0) {
       Logger.showNotification("未识别到选中的顶层 key", "warn");
@@ -67,7 +79,7 @@ export class TranslateSelectionToArb {
     if (!sourceLocale) {
       Logger.showNotification(
         "当前 arb 文件未配置@@locale或@@locale_alias属性，无法确定源语言",
-        "error"
+        "error",
       );
       return;
     }
@@ -83,21 +95,19 @@ export class TranslateSelectionToArb {
     }
 
     const allArbFiles = listArbFilesInDir(doc.fileName);
-    const targetFiles = allArbFiles.filter(
-      f => pathUtils.resolve(f) !== pathUtils.resolve(doc.fileName)
-    );
+    const targetFiles = allArbFiles.filter(f => f !== doc.fileName);
     if (targetFiles.length === 0) {
       Logger.showNotification("同目录下没有其它 arb 文件");
       return;
     }
 
     const dirtyOther = vscode.workspace.textDocuments.find(
-      d => targetFiles.includes(d.fileName) && d.isDirty
+      d => targetFiles.includes(d.fileName) && d.isDirty,
     );
     if (dirtyOther) {
       Logger.showNotification(
         `请先保存未保存的文件：${pathUtils.basename(dirtyOther.fileName)}`,
-        "error"
+        "error",
       );
       return;
     }
@@ -105,14 +115,13 @@ export class TranslateSelectionToArb {
     const overwrite = await TranslateSelectionToArb.confirm(
       sourceLocale,
       entries.map(e => e.key),
-      targetFiles
+      targetFiles,
     );
     if (overwrite === undefined) {
       return;
     }
 
-    const useEscaping = TranslateSelectionToArb.readUseEscaping();
-
+    const useEscaping = module.getL10nConfig()?.useEscaping ?? false;
     return vscode.window.withProgress(
       {
         cancellable: true,
@@ -127,9 +136,9 @@ export class TranslateSelectionToArb {
           useEscaping,
           overwrite,
           progress,
-          token
+          token,
         );
-      }
+      },
     );
   }
 
@@ -140,7 +149,7 @@ export class TranslateSelectionToArb {
     useEscaping: boolean,
     overwrite: boolean,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ) {
     // 按目标语言缓存翻译结果，避免同一语言重复调用
     const cache = new Map<string, Map<string, string | null>>();
@@ -184,7 +193,10 @@ export class TranslateSelectionToArb {
           break;
         }
 
-        if (!overwrite && Object.prototype.hasOwnProperty.call(targetObj, entry.key)) {
+        if (
+          !overwrite &&
+          Object.prototype.hasOwnProperty.call(targetObj, entry.key)
+        ) {
           continue;
         }
 
@@ -197,7 +209,7 @@ export class TranslateSelectionToArb {
         if (entry.value.trim().length === 0 || targetLocale === sourceLocale) {
           translated.set(
             entry.key,
-            TranslateUtils.fixTranslateError(entry.value, useEscaping, true)
+            TranslateUtils.fixTranslateError(entry.value, useEscaping, true),
           );
           continue;
         }
@@ -212,13 +224,13 @@ export class TranslateSelectionToArb {
           const result = await TranslateUtils.translate(
             sourceLocale,
             targetLocale,
-            entry.value
+            entry.value,
           );
           localeCache.set(
             entry.key,
             result
               ? TranslateUtils.fixTranslateError(result, useEscaping, true)
-              : null
+              : null,
           );
         }
 
@@ -241,7 +253,10 @@ export class TranslateSelectionToArb {
       fs.writeFileSync(filePath, JSON.stringify(targetObj, null, 2), "utf-8");
       insertedTotal += translated.size;
       if (hasError) {
-        Logger.showNotification(`${fileName} 存在翻译失败的内容，请重试`, "warn");
+        Logger.showNotification(
+          `${fileName} 存在翻译失败的内容，请重试`,
+          "warn",
+        );
       }
     }
 
@@ -253,35 +268,10 @@ export class TranslateSelectionToArb {
     if (failedFiles.length > 0) {
       summary.push(`失败：${failedFiles.join(", ")}`);
     }
-    Logger.showNotification(summary.join("；"), insertedTotal === 0 ? "warn" : "info");
-  }
-
-  /**
-   * 从 l10n.yaml 读取 use-escaping 配置
-   */
-  private static readUseEscaping(): boolean {
-    const sdk = getSdk();
-    if (!sdk) {
-      return false;
-    }
-    const l10nFilePath = vscode.Uri.joinPath(sdk.workspace, "l10n.yaml");
-    if (!fs.existsSync(l10nFilePath.fsPath)) {
-      return false;
-    }
-    try {
-      const contents = fs.readFileSync(l10nFilePath.fsPath, "utf-8");
-      const result = yaml.parseDocument(contents);
-      const useEscap = result.get("use-escaping");
-      if (typeof useEscap === "boolean") {
-        return useEscap;
-      }
-      if (typeof useEscap === "string") {
-        return "true" === useEscap;
-      }
-    } catch (e) {
-      Logger.e(e);
-    }
-    return false;
+    Logger.showNotification(
+      summary.join("；"),
+      insertedTotal === 0 ? "warn" : "info",
+    );
   }
 
   /**
@@ -290,7 +280,7 @@ export class TranslateSelectionToArb {
   private static async confirm(
     sourceLocale: string,
     keys: string[],
-    targetFiles: string[]
+    targetFiles: string[],
   ): Promise<boolean | undefined> {
     const detail =
       `将从源语言[${sourceLocale}]翻译以下 ${keys.length} 项，并插入同目录 ${targetFiles.length} 个 arb 文件：\n` +
@@ -302,7 +292,7 @@ export class TranslateSelectionToArb {
       "warn",
       { modal: true },
       overwriteLabel,
-      skipLabel
+      skipLabel,
     );
     if (pick === overwriteLabel) {
       return true;

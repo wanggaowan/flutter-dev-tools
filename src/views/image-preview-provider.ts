@@ -1,10 +1,10 @@
-import { url } from "inspector";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { disposeAll, openFile } from "../utils/utils";
 import path from "path";
 import { FlutterSdk } from "../sdk";
 import { ConfigUtils } from "../utils/config-utils";
+import { ImageVariantUtils } from "../utils/image-variant-utils";
 
 export class ImagePreviewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -253,29 +253,45 @@ export class ImagePreviewProvider
       return;
     }
     let files: ImageData[] = [];
-    this.readAllImages(dir, files);
+    this.readAllImages(dir, files, new Set<string>());
     this.webview.postMessage({ type: "loadImages", data: files });
   }
 
-  private readAllImages(dir: string, images: ImageData[]) {
+  private readAllImages(
+    dir: string,
+    images: ImageData[],
+    seen: Set<string>,
+  ) {
     try {
-      let files = fs.readdirSync(dir);
+      // 使用 Dirent 判断类型，跳过符号链接，避免循环引用和越界扫描
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
       let dirs: string[] = [];
       let rootPath = this.sdk.workspace.fsPath;
-      for (let name of files) {
-        let filePath = path.join(dir, name);
-        if (fs.statSync(filePath).isDirectory()) {
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) {
+          continue;
+        }
+        const filePath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
           dirs.push(filePath);
-        } else if (
-          this.isImage(filePath) &&
-          !this.existSameImage(images, filePath)
-        ) {
-          images.push(this.filePath2ImageData(name, filePath, rootPath));
+        } else if (entry.isFile() && this.isImage(entry.name)) {
+          // 多倍图（1.5x/2.0x 等）复用同一张主图展示，按「基准目录 + 文件名」去重
+          const identity = path.join(
+            ImageVariantUtils.getBaseDir(filePath),
+            entry.name,
+          );
+          if (seen.has(identity)) {
+            continue;
+          }
+          seen.add(identity);
+          images.push(
+            this.filePath2ImageData(entry.name, filePath, rootPath),
+          );
         }
       }
 
       for (let dir of dirs) {
-        this.readAllImages(dir, images);
+        this.readAllImages(dir, images, seen);
       }
     } catch (e) {}
   }
@@ -313,25 +329,6 @@ export class ImagePreviewProvider
       showPath: showPath,
       previewPath: previewPath,
     };
-  }
-
-  private existSameImage(images: ImageData[], filePath: string): boolean {
-    filePath = filePath
-      .replaceAll("1.5x/", "")
-      .replace("2.0x/", "")
-      .replace("3.0x/", "")
-      .replace("4.0x/", "");
-    for (let image of images) {
-      let path = image.previewPath
-        .replaceAll("1.5x/", "")
-        .replace("2.0x/", "")
-        .replace("3.0x/", "")
-        .replace("4.0x/", "");
-      if (filePath == path) {
-        return true;
-      }
-    }
-    return false;
   }
 
   private async changeDir() {

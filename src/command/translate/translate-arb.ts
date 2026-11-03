@@ -5,7 +5,6 @@ import Logger from "../../utils/logger";
 import { getSdk } from "../../extension";
 import pathUtils from "path";
 import * as fs from "fs";
-import * as yaml from "yaml";
 import { TranslateUtils } from "../../utils/translate-utils";
 
 /**
@@ -32,13 +31,13 @@ export class TranslateArb {
       return;
     }
 
-    let fsPath = uri.path;
+    let fsPath = uri.fsPath;
     if (!fsPath.toLowerCase().endsWith(".arb")) {
       Logger.showNotification("请选择arb格式文件");
       return;
     }
 
-    if (!fs.existsSync(uri.path)) {
+    if (!fs.existsSync(fsPath)) {
       Logger.showNotification("选择的在磁盘上不存在", "error");
       return;
     }
@@ -49,47 +48,32 @@ export class TranslateArb {
       return;
     }
 
-    let rootDirPath = sdk.workspace.path;
-    let resDirPath = "lib/l10n";
-    let resName = "app_en.arb";
-    var useEscaping = false;
-    let l10nFilePath = vscode.Uri.joinPath(sdk.workspace, "l10n.yaml");
-    if (fs.existsSync(l10nFilePath.path)) {
-      let contents = fs.readFileSync(l10nFilePath.fsPath, "utf-8");
-      let result = yaml.parseDocument(contents);
-
-      let projectDir = result.get("project-dir");
-      if (
-        typeof projectDir === "string" &&
-        projectDir &&
-        projectDir.length > 0
-      ) {
-        rootDirPath = projectDir;
-      }
-
-      let arbDir = result.get("arb-dir");
-      if (typeof arbDir === "string" && arbDir && arbDir.length > 0) {
-        resDirPath = arbDir;
-      }
-
-      let templateArbFile = result.get("template-arb-file");
-      if (
-        typeof templateArbFile === "string" &&
-        templateArbFile &&
-        templateArbFile.length > 0
-      ) {
-        resName = templateArbFile;
-      }
-
-      let useEscap = result.get("use-escaping");
-      if (typeof useEscap === "boolean") {
-        useEscaping = useEscap;
-      } else if (typeof useEscap === "string") {
-        useEscaping = "true" === useEscap;
-      }
+    // 当前 arb 文件可能属于子项目，按所在模块解析 l10n 配置
+    const module = sdk.getModule(uri);
+    if (!module) {
+      Logger.showNotification("未识别Flutter项目", "error");
+      return;
     }
 
-    let tempArbFilePath = pathUtils.join(rootDirPath, resDirPath, resName);
+    const l10nConfig = module.getL10nConfig();
+    if (!l10nConfig) {
+      Logger.showNotification(
+        "未找到 l10n.yaml 配置，请提供lib/l10n/app_en.arb模版文件或通过l10n.yaml配置",
+        "error"
+      );
+      return;
+    }
+
+    const resName = pathUtils.basename(l10nConfig.templateArbFilePath);
+    var useEscaping = false;
+    const useEscap = module.getL10nYaml()?.get("use-escaping");
+    if (typeof useEscap === "boolean") {
+      useEscaping = useEscap;
+    } else if (typeof useEscap === "string") {
+      useEscaping = "true" === useEscap;
+    }
+
+    let tempArbFilePath = l10nConfig.templateArbFilePath;
     try {
       let stat = fs.statSync(tempArbFilePath);
       if (stat.isDirectory()) {
@@ -107,17 +91,17 @@ export class TranslateArb {
       return;
     }
 
-    if (uri.path === tempArbFilePath) {
+    if (fsPath === tempArbFilePath) {
       return;
     }
 
     let needTranslateObj: any;
     try {
-      let content = fs.readFileSync(uri.path, "utf-8");
+      let content = fs.readFileSync(fsPath, "utf-8");
       if (!content || content.length == 0) {
         Logger.showNotification(
           `${pathUtils.basename(
-            uri.path
+            fsPath
           )}未配置@@locale属性或@@locale_alias属性`,
           "error"
         );
@@ -127,7 +111,7 @@ export class TranslateArb {
       needTranslateObj = JSON.parse(content);
     } catch (e) {
       Logger.showNotification(
-        `文件${pathUtils.basename(uri.path)}解析错误`,
+        `文件${pathUtils.basename(fsPath)}解析错误`,
         "error"
       );
       return;
@@ -137,7 +121,7 @@ export class TranslateArb {
       needTranslateObj["@@locale_alias"] ?? needTranslateObj["@@locale"];
     if (!locale) {
       Logger.showNotification(
-        `${pathUtils.basename(uri.path)}未配置@@locale属性或@@locale_alias属性`,
+        `${pathUtils.basename(fsPath)}未配置@@locale属性或@@locale_alias属性`,
         "error"
       );
       return;
@@ -145,7 +129,7 @@ export class TranslateArb {
 
     let tempJsonObj: any;
     try {
-      let content = fs.readFileSync(uri.path, "utf-8");
+      let content = fs.readFileSync(fsPath, "utf-8");
       if (!content || content.length == 0) {
         Logger.showNotification(
           `模板文件${resName}未配置@@locale属性或@@locale_alias属性`,
@@ -205,7 +189,8 @@ export class TranslateArb {
     let keys = Object.keys(tempJsonObj);
     let needTranslateMap = new Map<string, any>();
     for (let key of keys) {
-      if (key == "@@locale") {
+      // 跳过 @@locale、@@locale_alias 等本地化元数据，目标文件保留自己的值
+      if (key.startsWith("@@")) {
         continue;
       }
 
@@ -232,6 +217,7 @@ export class TranslateArb {
       });
 
       if (typeof value !== "string") {
+        // @key 等元数据对象无需翻译，原样写入后继续处理后续 key
         await this.writeTranslateResult(
           needTranslateFileUri,
           element[0],
@@ -241,7 +227,7 @@ export class TranslateArb {
         if (token.isCancellationRequested) {
           break;
         }
-        return;
+        continue;
       }
 
       value =

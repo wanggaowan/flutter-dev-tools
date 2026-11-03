@@ -44,13 +44,11 @@ export class ForamtUtils {
         timeout: 10000,
       });
 
-      if (result.status === 0) {
-        // 重新加载文档以获取格式化后的内容
-        const doc = await vscode.workspace.openTextDocument(documentUri);
-        await doc.save();
-      } else {
+      if (result.status !== 0) {
         Logger.e(`dart format failed: ${result.stderr}`);
       }
+      // 不调用 openTextDocument/doc.save：dart format 已直接写入磁盘，
+      // 若编辑器中的缓冲区有未保存内容，save 会把旧内容覆盖回格式化结果。
     } catch (e) {
       Logger.e(`Failed to run dart format: ${e}`);
     }

@@ -86,7 +86,11 @@ export class FileTemplateUtils {
   }
 
   private static sanitizeTemplate(value: any): TemplateEntity | undefined {
-    if (!value || typeof value.name !== "string" || value.name.length === 0) {
+    if (
+      !value ||
+      typeof value.name !== "string" ||
+      !FileTemplateUtils.isValidName(value.name)
+    ) {
       return undefined;
     }
 
@@ -108,7 +112,11 @@ export class FileTemplateUtils {
 
     const result: TemplateChildEntity[] = [];
     for (const item of value) {
-      if (!item || typeof item.name !== "string" || item.name.length === 0) {
+      if (
+        !item ||
+        typeof item.name !== "string" ||
+        !FileTemplateUtils.isValidName(item.name)
+      ) {
         continue;
       }
 
@@ -126,6 +134,37 @@ export class FileTemplateUtils {
       result.push(node);
     }
     return result;
+  }
+
+  /**
+   * 名称必须是单个路径片段，避免通过 ../、/、\ 等写到目标目录之外
+   */
+  private static isValidName(name: string): boolean {
+    return (
+      name.length > 0 &&
+      name !== "." &&
+      name !== ".." &&
+      !name.includes("/") &&
+      !name.includes("\\") &&
+      !name.includes("\0")
+    );
+  }
+
+  private static validateName(name: string, kind: string): void {
+    if (!FileTemplateUtils.isValidName(name)) {
+      throw new Error(`${kind}名称不合法：${name}`);
+    }
+  }
+
+  /**
+   * 校验目标路径必须位于基准目录内（含基准目录本身）
+   */
+  private static ensureInside(basePath: string, targetPath: string): void {
+    const base = path.resolve(basePath);
+    const target = path.resolve(targetPath);
+    if (target !== base && !target.startsWith(base + path.sep)) {
+      throw new Error(`模板路径不合法：${targetPath}`);
+    }
   }
 
   /**
@@ -186,7 +225,9 @@ export class FileTemplateUtils {
     const created: string[] = [];
     let parentPath = basePath;
     if (template.createFolder) {
+      FileTemplateUtils.validateName(template.name, "模板");
       parentPath = path.join(parentPath, template.name);
+      FileTemplateUtils.ensureInside(basePath, parentPath);
       fs.mkdirSync(parentPath, { recursive: true });
     }
 
@@ -213,7 +254,9 @@ export class FileTemplateUtils {
 
     for (const child of children) {
       if (child.isFolder) {
+        FileTemplateUtils.validateName(child.name, "目录");
         const folderPath = path.join(parentPath, child.name);
+        FileTemplateUtils.ensureInside(parentPath, folderPath);
         fs.mkdirSync(folderPath, { recursive: true });
         FileTemplateUtils.createChildFiles(
           folderPath,
@@ -249,6 +292,7 @@ export class FileTemplateUtils {
     createCopy: boolean,
     created: string[],
   ) {
+    FileTemplateUtils.validateName(name, "文件");
     const index = name.lastIndexOf(".");
     const baseName = index === -1 ? name : name.substring(0, index);
     const suffix = index === -1 ? "" : name.substring(index);
@@ -256,6 +300,7 @@ export class FileTemplateUtils {
     for (let tryCount = 0; ; tryCount++) {
       const fileName = tryCount === 0 ? name : `${baseName}_${tryCount}${suffix}`;
       const filePath = path.join(parentPath, fileName);
+      FileTemplateUtils.ensureInside(parentPath, filePath);
       if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, content, "utf-8");
         created.push(filePath);

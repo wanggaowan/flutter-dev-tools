@@ -85,125 +85,87 @@ export class PubspecUtils {
   }
 
   /**
-   * 从原始内容中提取 flutter.assets 部分的缩进级别
-   * @param content 文件内容
-   * @returns flutter 键的缩进空格数，默认 0
-   */
-  private static detectFlutterIndent(content: string): number {
-    const matches = content.matchAll(/^([^\S\n]*)flutter([^\S\n]*):\s*$/gm);
-    let minIndent = Infinity;
-
-    for (const match of matches) {
-      const indent = match[1].length;
-      if (indent < minIndent) {
-        minIndent = indent;
-      }
-    }
-
-    return minIndent === Infinity ? 0 : minIndent;
-  }
-
-  /**
    * 写入 pubspec.yaml 文件，只修改 flutter.assets 部分，保留其他内容和注释
    * @param pubspecPath 文件路径
    * @param assets 新的 assets 数组
    */
   static writePubspecAssetsOnly(pubspecPath: string, assets: string[]): void {
-    // assets.sort();
     let content = fs.readFileSync(pubspecPath, "utf-8");
     const lines = content.split("\n");
 
-    // 检测 flutter 键的缩进级别
-    const flutterIndent = this.detectFlutterIndent(content);
-    const assetsIndent = flutterIndent + 2;
+    // pubspec 的顶层键必须从第 0 列开始，只有顶层 flutter: 才是配置块
+    const flutterIndent = 0;
+    const flutterRegex = /^flutter\s*:/;
 
-    // 构建要替换的 assets 部分（不含最后换行）
+    // 查找 flutter 块起始行
+    let flutterLine = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].match(flutterRegex)) {
+        flutterLine = i;
+        break;
+      }
+    }
+
+    if (flutterLine === -1) {
+      // 连 flutter: 都没找到，添加到文件末尾
+      if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+        lines.push("");
+      }
+      lines.push("flutter:");
+      lines.push(...this.serializeAssets(assets, 2).trimEnd().split("\n"));
+      fs.writeFileSync(pubspecPath, lines.join("\n"), "utf-8");
+      return;
+    }
+
+    // 在 flutter 块内查找 assets 键（允许 assets: [] 这种行内写法）
+    const assetsRegex = /^(\s*)assets\s*:/;
+    let assetsStartLine = -1;
+    let assetsIndent = flutterIndent + 2;
+    for (let i = flutterLine + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (trimmed === "" || trimmed.startsWith("#")) {
+        continue;
+      }
+      const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+      if (indent <= flutterIndent) {
+        break;
+      }
+      const match = line.match(assetsRegex);
+      if (match) {
+        assetsStartLine = i;
+        assetsIndent = match[1].length;
+        break;
+      }
+    }
+
     const newAssetsLines = this.serializeAssets(assets, assetsIndent)
       .trimEnd()
       .split("\n");
 
-    // 查找 flutter 下的 assets 块
-    let inFlutterBlock = false;
-    let assetsStartLine = -1;
-    let assetsEndLine = -1;
-
-    const flutterPreSpace = " ".repeat(flutterIndent);
-    const startFlutter = flutterPreSpace + "flutter";
-    const startAssets = " ".repeat(assetsIndent) + "assets";
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trimEnd();
-
-      // 检测是否进入 flutter 块,flutter和分号直接可能有空格
-      if (trimmedLine.startsWith(startFlutter) && trimmedLine.endsWith(":")) {
-        inFlutterBlock = true;
-        continue;
-      }
-
-      // 如果在 flutter 块内
-      if (inFlutterBlock) {
-        // 遇到非缩进的行，说明离开了 flutter 块
-        if (line.length > 0 && !line.startsWith(flutterPreSpace)) {
-          inFlutterBlock = false;
-          break;
+    if (assetsStartLine !== -1) {
+      // 找到 assets 块的结束位置（下一个同级或更高级的键，或文件末尾）
+      let assetsEndLine = lines.length;
+      for (let i = assetsStartLine + 1; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("#")) {
+          continue;
         }
-
-        // 查找 assets: 行
-        if (trimmedLine.startsWith(startAssets) && trimmedLine.endsWith(":")) {
-          assetsStartLine = i;
-          // 找到 assets 块的结束位置（下一个同级或更高级的键，或文件末尾）
-          for (let j = i + 1; j < lines.length; j++) {
-            const nextLine = lines[j];
-            const nextTrimmed = nextLine.trim();
-
-            // 空行跳过
-            if (nextTrimmed === "") {
-              continue;
-            }
-
-            // 如果下一行的缩进小于等于 assets 的缩进，说明 assets 块结束
-            const nextIndent = nextLine.match(/^(\s*)/)?.[1].length || 0;
-            if (nextIndent <= assetsIndent && nextTrimmed !== "") {
-              assetsEndLine = j;
-              break;
-            }
-          }
-
-          // 如果没找到结束位置，说明到文件末尾
-          if (assetsEndLine === -1) {
-            assetsEndLine = lines.length;
-          }
-
+        const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+        if (indent <= assetsIndent) {
+          assetsEndLine = i;
           break;
         }
       }
-    }
-
-    // 执行替换
-    if (assetsStartLine !== -1 && assetsEndLine !== -1) {
-      // 替换现有的 assets 块
       lines.splice(
         assetsStartLine,
         assetsEndLine - assetsStartLine,
         ...newAssetsLines,
       );
     } else {
-      // 没有找到 assets，需要在 flutter: 后添加
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim() === "flutter:") {
-          // 在 flutter: 下一行插入
-          lines.splice(i + 1, 0, ...newAssetsLines);
-          break;
-        }
-      }
-
-      // 如果连 flutter: 都没找到，添加到文件末尾
-      if (!lines.some(line => line.trim() === "flutter:")) {
-        lines.push("");
-        lines.push("flutter:");
-        lines.push(...this.serializeAssets(assets, 2).trimEnd().split("\n"));
-      }
+      // 没有找到 assets，在 flutter: 后按同一缩进插入
+      lines.splice(flutterLine + 1, 0, ...newAssetsLines);
     }
 
     content = lines.join("\n");

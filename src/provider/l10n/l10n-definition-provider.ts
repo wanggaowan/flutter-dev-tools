@@ -3,7 +3,11 @@ import * as fs from "fs";
 import { FlutterModule, FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
 import Logger from "../../utils/logger";
-import { jsonKeyRegex, strCallRegex } from "../../utils/regexp-utils";
+import {
+  extractL10nKeyFromCall,
+  strCallRegex,
+} from "../../utils/regexp-utils";
+import { matchArbKeyLine } from "../../utils/arb-utils";
 import path from "path";
 
 const _tag = "L10nDefinitionProvider";
@@ -41,19 +45,18 @@ export class L10nDefinitionProvider
     position: vscode.Position,
     token: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.Definition | vscode.DefinitionLink[]> {
-    let path = document.uri.path;
-    let provider = this.providers.get(path);
-    if (provider != null) {
-      return provider.findDefinition(document, position, token);
-    }
-
-    let module = this.sdk.getModule(path);
+    let module = this.sdk.getModule(document.uri);
     if (module == null) {
       return null;
     }
 
-    provider = new L10nDefinitionProviderModule(module);
-    this.providers.set(path, provider);
+    // 以模块为粒度缓存，避免为每个文档创建一套监听器
+    const key = module.workspace.toString();
+    let provider = this.providers.get(key);
+    if (provider == null) {
+      provider = new L10nDefinitionProviderModule(module);
+      this.providers.set(key, provider);
+    }
     return provider.findDefinition(document, position, token);
   }
 }
@@ -116,8 +119,11 @@ class L10nDefinitionProviderModule
       return null;
     }
 
-    let splits = matchText.split(".");
-    let key = splits[splits.length - 1];
+    // 从完整调用中提取 key，避免带参数调用时取到参数片段
+    let key = extractL10nKeyFromCall(matchText);
+    if (!key) {
+      return null;
+    }
     let translateList: vscode.Location[] = [];
     let arbFiles = this.getArbFiles();
     for (const element of arbFiles) {
@@ -133,17 +139,14 @@ class L10nDefinitionProviderModule
 
         let lines = content.split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
-          let line = lines[i];
-          let match = line.match(jsonKeyRegex);
-          if (match) {
-            let key2 = match[0].substring(0, match[0].length - 1).trim();
-            if (key2 == `"${key}"`) {
-              let location = new vscode.Location(
+          const keyLine = matchArbKeyLine(lines[i]);
+          if (keyLine && keyLine.key === key) {
+            translateList.push(
+              new vscode.Location(
                 element,
-                new vscode.Position(i, match.index ?? 0),
-              );
-              translateList.push(location);
-            }
+                new vscode.Position(i, keyLine.indent + 1),
+              ),
+            );
           }
         }
       } catch (e) {

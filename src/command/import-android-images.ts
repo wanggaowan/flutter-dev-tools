@@ -90,7 +90,14 @@ export class ImportAndroidImages implements vscode.Disposable {
       return;
     }
 
-    const targetBasePath = path.join(this.sdk.workspace.fsPath, imageSrcPath);
+    // 选择的目标可能在子项目（module）中，需要按所在模块计算图片目录
+    const module = this.sdk.getModule(uri);
+    if (!module) {
+      Logger.showNotification("未识别Flutter项目", "error");
+      return;
+    }
+
+    const targetBasePath = path.join(module.workspace.fsPath, imageSrcPath);
     const selectedPath = uri.fsPath;
 
     // 检查选中路径是否是目标目录或其子目录
@@ -249,7 +256,7 @@ export class ImportAndroidImages implements vscode.Disposable {
         drawableGroups,
         mipmapGroups,
         selectedPath,
-        this.collectPreviewRoots(densityDirsToProcess),
+        this.collectPreviewRoots(densityDirsToProcess, module.workspace),
       );
       if (!confirmedGroups || confirmedGroups.length === 0) {
         Logger.showNotification("已取消导入", "info");
@@ -271,7 +278,7 @@ export class ImportAndroidImages implements vscode.Disposable {
 
         if (importedCount > 0) {
           const relativePath = path.relative(
-            this.sdk.workspace.fsPath,
+            module.workspace.fsPath,
             selectedPath,
           );
           Logger.showNotification(
@@ -471,7 +478,11 @@ export class ImportAndroidImages implements vscode.Disposable {
       let isResolved = false;
 
       // 设置 HTML 内容
-      panel.webview.html = this.getPreviewHtml(drawableGroups, mipmapGroups);
+      panel.webview.html = this.getPreviewHtml(
+        panel.webview,
+        drawableGroups,
+        mipmapGroups,
+      );
 
       // 监听消息
       const messageListener = panel.webview.onDidReceiveMessage(
@@ -484,7 +495,12 @@ export class ImportAndroidImages implements vscode.Disposable {
               // 用户确认导入，勾选状态已包含在 groups 中，冲突不再阻断导入
               isResolved = true;
               panel.dispose();
-              resolve(message.groups as PendingImageGroup[]);
+              resolve(
+                this.mergeConfirmedGroups(message.groups, [
+                  ...drawableGroups,
+                  ...mipmapGroups,
+                ]),
+              );
               break;
 
             case "cancel":
@@ -531,6 +547,43 @@ export class ImportAndroidImages implements vscode.Disposable {
   }
 
   /**
+   * 合并 WebView 回传的图片组数据。
+   * 只接受用户在界面中可修改的字段（目标文件名、冲突勾选状态），其余字段一律以插件侧
+   * 收集的数据为准，避免 WebView 数据被篡改后影响来源文件路径等内容。
+   */
+  private mergeConfirmedGroups(
+    value: unknown,
+    baseGroups: PendingImageGroup[],
+  ): PendingImageGroup[] {
+    if (!Array.isArray(value)) {
+      return baseGroups;
+    }
+
+    return baseGroups.map((group, index) => {
+      const incoming = value[index] as Partial<PendingImageGroup> | undefined;
+      if (!incoming) {
+        return group;
+      }
+      if (typeof incoming.targetName === "string") {
+        group.targetName = incoming.targetName;
+      }
+      group.importLast = incoming.importLast === true;
+      group.overwrite = incoming.overwrite === true;
+      return group;
+    });
+  }
+
+  /**
+   * 校验目标文件名：必须是单个文件名（不允许路径分隔符）且是受支持的图片类型
+   */
+  private static isValidTargetName(name: string): boolean {
+    if (!name || name.includes("\0") || name.includes("\\")) {
+      return false;
+    }
+    return name === path.basename(name) && isImage(name);
+  }
+
+  /**
    * 将图片转换为 WebView 可访问的资源 URI 用于预览
    */
   private convertImagesToWebviewUris(
@@ -553,9 +606,10 @@ export class ImportAndroidImages implements vscode.Disposable {
    */
   private collectPreviewRoots(
     densityDirs: Array<[string, string]>,
+    workspaceUri: vscode.Uri = this.sdk.workspace,
   ): vscode.Uri[] {
     const roots = new Map<string, vscode.Uri>();
-    roots.set(this.sdk.workspace.toString(), this.sdk.workspace);
+    roots.set(workspaceUri.toString(), workspaceUri);
     for (const [, dirPath] of densityDirs) {
       roots.set(dirPath, vscode.Uri.file(dirPath));
     }
@@ -566,27 +620,31 @@ export class ImportAndroidImages implements vscode.Disposable {
    * 生成预览对话框的 HTML
    */
   private getPreviewHtml(
+    webview: vscode.Webview,
     drawableGroups: PendingImageGroup[],
     mipmapGroups: PendingImageGroup[],
   ): string {
+    const nonce = this.getNonce();
+    // 内联到 script 中的 JSON 需要转义 <，避免文件名中的 </script> 提前闭合标签
     const drawableJson = JSON.stringify(
       drawableGroups.map(g => ({
         ...g,
         variants: g.variants.map(v => ({ ...v })),
       })),
-    );
+    ).replace(/</g, "\\u003c");
     const mipmapJson = JSON.stringify(
       mipmapGroups.map(g => ({
         ...g,
         variants: g.variants.map(v => ({ ...v })),
       })),
-    );
+    ).replace(/</g, "\\u003c");
 
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>待导入图片预览</title>
   <style>
     html,
@@ -780,7 +838,7 @@ export class ImportAndroidImages implements vscode.Disposable {
     <button class="btn-confirm" id="confirmBtn">确认导入</button>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const drawableGroups = ${drawableJson};
     const mipmapGroups = ${mipmapJson};
@@ -989,6 +1047,16 @@ export class ImportAndroidImages implements vscode.Disposable {
 </html>`;
   }
 
+  private getNonce(): string {
+    let text = "";
+    const possible =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+  }
+
   /**
    * 计算所有图片组的冲突状态
    * batch: 与本批次即将导入的数据冲突（批次内重名）
@@ -1020,12 +1088,15 @@ export class ImportAndroidImages implements vscode.Disposable {
       const hasSameNameGroup = (nameCount.get(name) ?? 0) > 1;
 
       // 只检查该组实际会写入的变体目录；相同图片只取一张，优先从低分辨率目录查找
+      // 非法文件名不参与目标目录检查（复制阶段会拒绝写入）
       const targetPreviewUris: string[] = [];
       let hasTargetConflict = false;
       const variantOrder = ["", "1.5x", "2.0x", "3.0x", "4.0x"];
-      const sortedVariantKeys = [...new Set(variantKeys)].sort(
-        (a, b) => variantOrder.indexOf(a) - variantOrder.indexOf(b),
-      );
+      const sortedVariantKeys = ImportAndroidImages.isValidTargetName(name)
+        ? [...new Set(variantKeys)].sort(
+            (a, b) => variantOrder.indexOf(a) - variantOrder.indexOf(b),
+          )
+        : [];
       for (const key of sortedVariantKeys) {
         const targetFile = path.join(
           key ? path.join(targetBasePath, key) : targetBasePath,
@@ -1115,6 +1186,12 @@ export class ImportAndroidImages implements vscode.Disposable {
     writtenFiles: Set<string>,
   ): Promise<number> {
     let copiedCount = 0;
+
+    // 目标文件名来自 WebView 输入，必须校验为单个图片文件名，避免路径穿越写入目录之外
+    if (!ImportAndroidImages.isValidTargetName(group.targetName)) {
+      Logger.e(`非法的目标文件名: ${group.targetName}`);
+      return copiedCount;
+    }
 
     // 同一变体目录存在多个同名来源时，勾选导入最后一个，否则导入第一个
     const variants = new Map<string, PendingImageVariant>();

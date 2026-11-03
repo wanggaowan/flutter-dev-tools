@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { ConfigUtils } from "../utils/config-utils";
 import { PubspecUtils } from "../utils/pubspec-utils";
 import { ImageReferenceGenerator } from "../utils/image-reference-generator";
@@ -113,6 +114,11 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   private watcher: vscode.FileSystemWatcher | undefined;
   private clearDirectoryDeletedSetTimeoutId: any;
   private clearImageReferenceSetTimeoutId: any;
+  // 批量导入时同一目录会产生大量创建事件，按目录合并后再统一处理
+  private pendingCreateDirs = new Set<string>();
+  private pendingCreateImages = new Set<string>();
+  private createSetTimeoutId: any;
+  private createImageSetTimeoutId: any;
 
   constructor(workspaceRoot: vscode.Uri, imageSrcPath: string) {
     this.workspaceRoot = workspaceRoot;
@@ -162,24 +168,17 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
       const fsStat = await vscode.workspace.fs.stat(uri);
       // 处理目录创建
       if (fsStat.type === vscode.FileType.Directory) {
-        this.handleDirectoryCreated(uri);
-        // 文件件重命名时，不会触发文件的创建，因此此处也执行一次目录下图片引用资源的生成
-        // 这在导入图片时会和下面单独处理文件有重复，但是目前也无法避免
-        this.generateDirImageReference(uri.fsPath);
+        this.scheduleCreateDir(uri.fsPath);
+        this.generateImageReference(uri, true);
+        fs.readdir(uri.fsPath, { withFileTypes: true }, () => {});
       } else if (fsStat.type === vscode.FileType.File) {
         // 处理图片文件创建
         const fileName = path.basename(uri.fsPath).toLowerCase();
         if (isImage(fileName)) {
-          const relativePath = path.relative(
-            this.workspaceRoot.fsPath,
-            uri.fsPath,
-          );
-          Logger.d(`${this._moduleName}-${_tag}-检测到新图片: ${relativePath}`);
-          // 这一步是为了目录创建时不是在vscode中，因此此处进行补救
-          this.handleDirectoryCreated(
-            vscode.Uri.file(path.dirname(uri.fsPath)),
-          );
-          this.generateImageReference(uri.fsPath);
+          Logger.d(`${this._moduleName}-${_tag}-检测到新图片: ${uri.fsPath}`);
+          // 按父目录合并处理，避免批量导入时每个文件都触发一次全量扫描
+          this.scheduleCreateDir(path.dirname(uri.fsPath));
+          this.generateImageReference(uri, false);
         }
       }
     } catch (e) {
@@ -205,17 +204,7 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
       // .5x,.0x会被当做后缀。所以识别指定文件后缀，不再此列举中的图片当做文件处理
       // 判断是目录还是文件（通过路径特征判断,因为文件或目录被删除，因此无法通过fs读取是文件还是目录）
       const ext = path.extname(fileName).toLowerCase();
-      const isLikelyFile = [
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".webp",
-        ".gif",
-        ".svg",
-        ".bmp",
-      ].includes(ext);
-
-      if (isLikelyFile) {
+      if (isImage(ext)) {
         this.clearImageReference();
       } else {
         // 目录
@@ -229,31 +218,61 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   }
 
   /**
-   * 生成单个图片的引用
+   * 合并 200ms 内同一目录的创建事件，统一更新 pubspec
    */
-  private async generateImageReference(imagePath: string): Promise<void> {
-    try {
-      await ImageReferenceGenerator.generateForSingleImage(
-        this.workspaceRoot.fsPath,
-        imagePath,
-      );
-    } catch (e) {
-      Logger.e(`${this._moduleName}-${_tag}:生成图片引用失败`, e);
+  private scheduleCreateDir(dir: string) {
+    this.pendingCreateDirs.add(dir);
+    if (this.createSetTimeoutId) {
+      clearTimeout(this.createSetTimeoutId);
     }
+
+    this.createSetTimeoutId = setTimeout(async () => {
+      const dirs = Array.from(this.pendingCreateDirs);
+      this.pendingCreateDirs.clear();
+      this.createSetTimeoutId = undefined;
+      for (const dir of dirs) {
+        PubspecUtils.ensureAssetDirectory(this.workspaceRoot.fsPath, dir);
+      }
+    }, 300);
   }
 
   /**
-   * 生成目录下所有图片的引用
+   * 合并 200ms 内同一图片的创建事件，统一更新图片引用
    */
-  private async generateDirImageReference(dirPath: string): Promise<void> {
-    try {
-      await ImageReferenceGenerator.generateForDirectory(
+  private async generateImageReference(
+    uri: vscode.Uri,
+    isDir: boolean,
+  ): Promise<void> {
+    if (isDir) {
+      const images = ImageReferenceGenerator.collectImages(
         this.workspaceRoot.fsPath,
-        dirPath,
+        uri.fsPath,
       );
-    } catch (e) {
-      Logger.e(`${this._moduleName}-${_tag}:生成图片引用失败`, e);
+      for (const image of images) {
+        this.pendingCreateImages.add(image);
+      }
+    } else if (
+      !ImageReferenceGenerator.isInVariantDir(
+        this.workspaceRoot.fsPath,
+        uri.fsPath,
+      )
+    ) {
+      this.pendingCreateImages.add(uri.fsPath);
     }
+
+    if (this.createImageSetTimeoutId) {
+      clearTimeout(this.createImageSetTimeoutId);
+    }
+
+    this.createImageSetTimeoutId = setTimeout(() => {
+      const images = Array.from(this.pendingCreateImages);
+      this.pendingCreateImages.clear();
+      this.createImageSetTimeoutId = undefined;
+      ImageReferenceGenerator.generateForImages(
+        this.workspaceRoot.fsPath,
+        images,
+      );
+    }, 200);
   }
 
   /**
@@ -285,35 +304,6 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   }
 
   /**
-   * 处理目录创建事件
-   */
-  private async handleDirectoryCreated(uri: vscode.Uri): Promise<void> {
-    try {
-      const relativePath = path.relative(this.workspaceRoot.fsPath, uri.fsPath);
-      Logger.d(
-        `${this._moduleName}-${_tag}-检测到新目录/目录下文件变更: ${relativePath}`,
-      );
-
-      // 添加到 pubspec.yaml
-      const changed = await PubspecUtils.ensureAssetDirectory(
-        this.workspaceRoot.fsPath,
-        uri.fsPath,
-      );
-
-      if (changed) {
-        Logger.d(
-          `${this._moduleName}-${_tag}-已将新目录添加到 pubspec.yaml: ${relativePath}`,
-        );
-      }
-    } catch (e) {
-      Logger.e(
-        `${this._moduleName}-${_tag}-处理目录创建事件失败: ${uri.fsPath}`,
-        e,
-      );
-    }
-  }
-
-  /**
    * 清理无效目录数据
    * 200ms 内多次调用只执行最后一次
    */
@@ -338,6 +328,29 @@ export class ImageAssetWatcherWrapper implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.createSetTimeoutId) {
+      clearTimeout(this.createSetTimeoutId);
+      this.createSetTimeoutId = undefined;
+    }
+
+    if (this.createImageSetTimeoutId) {
+      clearTimeout(this.createImageSetTimeoutId);
+      this.createImageSetTimeoutId = undefined;
+    }
+
+    if (this.clearDirectoryDeletedSetTimeoutId) {
+      clearTimeout(this.clearDirectoryDeletedSetTimeoutId);
+      this.clearDirectoryDeletedSetTimeoutId = undefined;
+    }
+
+    if (this.clearImageReferenceSetTimeoutId) {
+      clearTimeout(this.clearImageReferenceSetTimeoutId);
+      this.clearImageReferenceSetTimeoutId = undefined;
+    }
+
+    this.pendingCreateDirs.clear();
+    this.pendingCreateImages.clear();
+
     if (this.watcher) {
       this.watcher.dispose();
       this.watcher = undefined;

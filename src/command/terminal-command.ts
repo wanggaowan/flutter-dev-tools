@@ -19,6 +19,8 @@ import { ImageReferenceGenerator } from "../utils/image-reference-generator";
  */
 export class TerminalCommand {
   private disposableList: vscode.Disposable[] = [];
+  // 复用 gen-l10n 终端，避免每次 arb 保存都新建终端
+  private static l10nTerminals = new Map<string, vscode.Terminal>();
 
   constructor() {
     let dispose = vscode.commands.registerCommand(COMMAND_GEN_G_FILE, () =>
@@ -44,6 +46,8 @@ export class TerminalCommand {
 
   dispose() {
     disposeAll(this.disposableList);
+    TerminalCommand.l10nTerminals.forEach(terminal => terminal.dispose());
+    TerminalCommand.l10nTerminals.clear();
   }
 
   /**
@@ -144,12 +148,26 @@ export class TerminalCommand {
    * @param isSigle 是否只生成当前选择的文件
    */
   static genl10n(uri?: string | vscode.Uri) {
-    // vscode.commands.executeCommand("flutter.task.genl10n");
     let command = "flutter gen-l10n";
-    const terminal = vscode.window.createTerminal({
-      name: EXTENSION_NAME,
-      cwd: uri,
-    });
+    const cwd = typeof uri === "string" ? uri : uri?.fsPath;
+    const key = cwd ? path.resolve(cwd) : "";
+    let terminal = key ? TerminalCommand.l10nTerminals.get(key) : undefined;
+    if (terminal && terminal.exitStatus !== undefined) {
+      terminal.dispose();
+      terminal = undefined;
+    }
+
+    if (!terminal) {
+      terminal = vscode.window.createTerminal({
+        name: key ? `${EXTENSION_NAME} l10n` : EXTENSION_NAME,
+        cwd: uri,
+      });
+      if (key) {
+        TerminalCommand.l10nTerminals.set(key, terminal);
+      }
+    }
+
+    // terminal.show();
     terminal.sendText(command);
   }
 }

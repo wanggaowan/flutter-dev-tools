@@ -2,7 +2,10 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { FlutterModule, FlutterSdk } from "../../sdk";
 import { disposeAll } from "../../utils/utils";
-import { strCallRegexWithEndSymbol } from "../../utils/regexp-utils";
+import {
+  extractL10nKeyFromCall,
+  strCallRegexWithEndSymbol,
+} from "../../utils/regexp-utils";
 import { ConfigUtils } from "../../utils/config-utils";
 import path from "path";
 import Logger from "../../utils/logger";
@@ -79,18 +82,18 @@ export class L10nFoldingProvider implements vscode.Disposable {
   private getProvider(
     documentUri: vscode.Uri,
   ): L10nFoldingProviderModule | null {
-    let provider = this.providers.get(documentUri.path);
-    if (provider != null) {
-      return provider;
-    }
-
     const module = this.sdk.getModule(documentUri);
     if (module == null) {
       return null;
     }
 
-    provider = new L10nFoldingProviderModule(this.sdk, module);
-    this.providers.set(documentUri.path, provider);
+    // 以模块为粒度缓存，避免为每个文档创建装饰类型和监听器
+    const key = module.workspace.toString();
+    let provider = this.providers.get(key);
+    if (provider == null) {
+      provider = new L10nFoldingProviderModule(this.sdk, module);
+      this.providers.set(key, provider);
+    }
     return provider;
   }
 }
@@ -268,7 +271,7 @@ class L10nFoldingProviderModule implements vscode.Disposable {
         continue;
       }
 
-      let key = this.extractKey(match[0]);
+      let key = extractL10nKeyFromCall(match[0]);
       if (!key) {
         continue;
       }
@@ -310,13 +313,4 @@ class L10nFoldingProviderModule implements vscode.Disposable {
     editor.setDecorations(this.afterDecoration, afterDecorations);
   }
 
-  private extractKey(matchText: string): string | null {
-    let cleaned = matchText.replace(/\(.*\)/, "");
-    let splits = cleaned.split(".");
-    let key = splits[splits.length - 1]
-      ?.replace(";", "")
-      .replace(",", "")
-      .trim();
-    return key && key.length > 0 ? key : null;
-  }
 }

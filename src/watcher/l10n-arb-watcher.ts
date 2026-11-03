@@ -1,10 +1,8 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
-import * as yaml from "yaml";
 import * as path from "path";
 import Logger from "../utils/logger";
 import { TerminalCommand } from "../command/terminal-command";
-import { FlutterSdk } from "../sdk";
+import { FlutterModule, FlutterSdk } from "../sdk";
 
 const _tag = "L10nArbWatcher";
 
@@ -26,7 +24,7 @@ export class L10nArbWatcher implements vscode.Disposable {
    */
   private setupWatcher(): void {
     this.sdk.modules.forEach(item => {
-      this.l10nArbWatchers.push(new L10nArbWatcherWrapper(item.workspace));
+      this.l10nArbWatchers.push(new L10nArbWatcherWrapper(item));
     });
   }
 
@@ -46,8 +44,8 @@ class L10nArbWatcherWrapper implements vscode.Disposable {
   private configWatcher: vscode.FileSystemWatcher | undefined;
   private templateArbPath: string | undefined;
 
-  constructor(workspace: vscode.Uri) {
-    this.workspaceRoot = workspace;
+  constructor(private readonly module: FlutterModule) {
+    this.workspaceRoot = module.workspace;
     this._moduleName = path.basename(this.workspaceRoot.fsPath);
     this.setupWatcher();
   }
@@ -67,23 +65,15 @@ class L10nArbWatcherWrapper implements vscode.Disposable {
    * 设置 l10n.yaml 配置文件的监听器
    */
   private setupConfigWatcher(): void {
-    const l10nYamlPath = path.join(this.workspaceRoot.fsPath, "l10n.yaml");
-    if (!fs.existsSync(l10nYamlPath)) {
-      Logger.d(
-        `${this._moduleName}-${_tag}未找到 l10n.yaml 文件，跳过配置文件监听器设置`,
-      );
-      return;
-    }
-
     const pattern = new vscode.RelativePattern(this.workspaceRoot, "l10n.yaml");
-
     this.configWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    // 监听 l10n.yaml 的变化
+    // 监听 l10n.yaml 的新增和变化，配置变化后需要重新解析 arb 路径
     this.configWatcher.onDidChange(async uri => {
       await this.handleConfigChanged(uri);
     });
-
+    this.configWatcher.onDidCreate(async uri => {
+      await this.handleConfigChanged(uri);
+    });
     Logger.d(`已启动${this._moduleName}-${_tag} l10n.yaml 配置文件监听器`);
   }
 
@@ -91,71 +81,35 @@ class L10nArbWatcherWrapper implements vscode.Disposable {
    * 设置 arb 文件的监听器
    */
   private setupArbFileWatcher(): void {
-    const templateArbFile = this.getTemplateArbFilePath();
-    if (!templateArbFile) {
+    let config = this.module.getL10nConfig();
+    if (!config) {
       Logger.d(
-        `${this._moduleName}-${_tag}: 未找到有效的 template-arb-file 配置，跳过 l10n arb 监听器设置`,
+        `${this._moduleName}-${_tag}: 未找到有效的 l10n.yaml 配置，跳过 l10n arb 监听器设置`,
       );
       return;
     }
 
-    this.templateArbPath = templateArbFile;
+    this.templateArbPath = config.templateArbFilePath;
 
-    // 监听文件系统变化（包括编辑器保存、fs.writeFileSync 等所有写入操作）
+    // 即使文件当前不存在也持续监听，兼容后续创建模板 arb 文件的场景
     const pattern = new vscode.RelativePattern(
-      this.workspaceRoot,
-      path.relative(this.workspaceRoot.fsPath, templateArbFile),
+      vscode.Uri.file(path.dirname(config.templateArbFilePath)),
+      path.basename(config.templateArbFilePath),
     );
 
     this.arbFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-    // 监听文件变化
+    // 监听文件系统和编辑器带来的所有写入操作
     this.arbFileWatcher.onDidChange(uri => {
+      this.handleFileChanged(uri);
+    });
+    this.arbFileWatcher.onDidCreate(uri => {
       this.handleFileChanged(uri);
     });
 
     Logger.d(
-      `${this._moduleName}-${_tag}: 已启动 l10n arb 文件监听器: ${path.relative(this.workspaceRoot.fsPath, templateArbFile)}`,
+      `${this._moduleName}-${_tag}: 已启动 l10n arb 文件监听器: ${config.templateArbFilePath}`,
     );
-  }
-
-  /**
-   * 从 l10n.yaml 读取 template-arb-file 的完整路径
-   */
-  private getTemplateArbFilePath(): string | undefined {
-    try {
-      const l10nYamlPath = path.join(this.workspaceRoot.fsPath, "l10n.yaml");
-      if (!fs.existsSync(l10nYamlPath)) {
-        return undefined;
-      }
-
-      const content = fs.readFileSync(l10nYamlPath, "utf-8");
-      const config = yaml.parse(content);
-
-      let rootDirPath = this.workspaceRoot.fsPath;
-      let resDirPath = config["arb-dir"] || "lib/l10n";
-      let resName = config["template-arb-file"] || "app_en.arb";
-
-      const projectDir = config["project-dir"];
-      if (
-        typeof projectDir === "string" &&
-        projectDir &&
-        projectDir.length > 0
-      ) {
-        rootDirPath = projectDir;
-      }
-
-      const arbFilePath = path.join(rootDirPath, resDirPath, resName);
-      if (!fs.existsSync(arbFilePath)) {
-        Logger.d(`template-arb-file 不存在: ${arbFilePath}`);
-        return undefined;
-      }
-
-      return arbFilePath;
-    } catch (e) {
-      Logger.e(`${_tag}-}: 读取 l10n.yaml 失败`, e);
-      return undefined;
-    }
   }
 
   /**
