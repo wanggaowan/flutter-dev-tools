@@ -5,7 +5,7 @@
 /\f/	  // 匹配一个换页符。
 /\n/	  // 匹配一个换行符。
 /\r/	  // 匹配一个回车符。
-*/ 
+*/
 
 
 // 匹配 import *;,允许;前换行回车
@@ -61,7 +61,7 @@ export const pageParamRegex = new RegExp(
 // 匹配 "*": 格式
 export const jsonKeyRegex = new RegExp(/".*"\s*:/g);
 
-/// 匹配给定methodName的get方法，如static String get methodName => 'xxx'
+/// 匹配给定methodName的get方法，如static String get methodName => 'xxx';
 export function getStaticGetMethodRegex(methodName: string) {
   return new RegExp(
     `\\sstatic\\s+String\\s+get\\s+${methodName}\\s*=>\\s*('([^']*)'|"([^"]*)")\\s*;\\n?`,

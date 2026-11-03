@@ -134,6 +134,7 @@ export class ImageDocHoverProvider
             let value = keyValue[1]
               .replaceAll('"', "")
               .replaceAll("'", "")
+              .replaceAll(";","")
               .replaceAll("\n", "")
               .replaceAll("\r", "")
               .trim();
